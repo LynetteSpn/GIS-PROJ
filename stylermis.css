@@ -1,0 +1,240 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+
+/* Top toolbar (dropdowns) */
+.toolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%); /* center horizontally */
+  z-index: 1000;
+  color: white;
+  display: flex;
+  gap: 10px;
+
+  background: rgba(15, 102, 12, 0.15); /* semi-transparent */
+  backdrop-filter: blur(10px);           /* blur background */
+  -webkit-backdrop-filter: blur(10px);   /* Safari support */
+
+  padding: 10px 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(12, 63, 2, 0.3); /* subtle glass border */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);  /* soft shadow */
+  
+  transition: background 0.3s ease;
+}
+
+.toolbar-title {
+  font-size: 16px;
+  color: #ffffff;
+  padding: 6px 6px;
+  text-align: center;
+}
+
+.toolbar:hover {
+  background: rgba(6, 44, 1, 0.25); /* brighten a bit on hover */
+}
+
+@media (max-width: 600px) {
+  #searchContainer {
+    top: auto;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+  }
+
+  #roadSearch {
+    width: 100%;
+  }
+
+  #suggestions {
+    width: 100%;
+  }
+}
+
+
+.filter select,
+.toolbar select {
+  font-size: 14px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+#resetButton {
+  font-size: 15px;
+  font-family: 'Times New Roman', Times, serif;
+  padding: 6px 10px;
+  border: 1px solid rgba(12, 63, 2, 0.3);
+  border-radius: 6px;
+  background: rgb(5, 61, 0);
+  cursor: pointer;
+  color: white ;
+}
+
+
+.search-wrapper {
+  position: relative;
+  width: 200px;
+}
+
+.toolbar input[type="text"] {
+  font-size: 14px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+
+/* Side toolbar (buttons like recenter) */
+.side-toolbar {
+  position: absolute;
+  top: 100px;
+  left: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side-toolbar button {
+  background: rgba(15, 102, 12, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.side-toolbar button:hover {
+  background: rgba(6, 44, 1, 0.25);
+}
+
+
+/* Legend container */
+
+.legend {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.95); /* solid clean white */
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 12px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5em;
+  overflow: hidden;
+  width: 170px;
+  max-height: 300px;
+}
+
+/* Minimized state */
+.legend.minimized {
+  width: 7px;
+  height: 7px;
+}
+
+/* Hide legend details when minimized */
+#legend.minimized .legend-content {
+  display: none;
+}
+
+/* Toggle button */
+#minimize-legend {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;   /* no colored background */
+  color: #333;              /* subtle dark text */
+  border: none;
+  font-weight: bold;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  line-height: 18px;
+  text-align: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+/* Button hover effect */
+#minimize-legend:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* Legend title */
+.legend b {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: block;
+  color: #222;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.legend-item.active {
+  opacity: 1;
+  font-weight: bold;
+}
+
+.legend-item.disabled {
+  opacity: 0.4;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.autocomplete-items {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  border-radius: 5px;
+  color: black;
+  background-color: white;
+  border: 0px;
+  border-top: none;
+  z-index: 1001;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.autocomplete-items div {
+  padding: 10px;
+  cursor: pointer;
+}
+
+.autocomplete-items div:hover {
+  background-color: #e9e9e9;
+}
