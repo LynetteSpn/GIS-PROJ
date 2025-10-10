@@ -1,3 +1,53 @@
+@media (max-width: 600px) {
+  /* Search bar already here */
+  #searchContainer {
+    top: auto;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+  }
+
+  #roadSearch,
+  #suggestions {
+    width: 100%;
+  }
+
+  /* Toolbar adjustments */
+  .toolbar {
+    top: auto;          /* remove from top */
+    bottom: 70px;       /* sit just above search bar */
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: column;  /* stack vertically */
+    gap: 6px;
+    width: 60%;
+    height: 20%;
+    padding: 8px;
+  }
+
+  .toolbar-title {
+    font-size: 14px;
+  }
+
+  
+  .side-toolbar button {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  /* Legend tweaks */
+  .legend {
+  background: rgba(15, 102, 12, 0.15); /* semi-transparent */
+  backdrop-filter: blur(10px);           /* blur background */
+  -webkit-backdrop-filter: blur(10px);   /* Safari support */
+  }
+
+  .legend b {
+    font-size: 14px;
+  }
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -44,14 +94,6 @@ html, body {
   background: rgba(6, 44, 1, 0.25); /* brighten a bit on hover */
 }
 
-@media (max-width: 600px) {
-  #searchContainer {
-    top: auto;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90%;
-  }
 
   #roadSearch {
     width: 100%;
@@ -60,7 +102,7 @@ html, body {
   #suggestions {
     width: 100%;
   }
-}
+
 
 
 .filter select,

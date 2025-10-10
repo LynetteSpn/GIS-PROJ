@@ -26,8 +26,6 @@ const baseGroup = new ol.layer.Group({
 satelliteLayer.setVisible(true);
 regularLayer.setVisible(false);
 
-
-
 // =========================================================================
 // 2. STYLES (Must be defined before layers that use them)
 // =========================================================================
@@ -84,7 +82,7 @@ const roadLayer = new ol.layer.Vector({
     format: new ol.format.GeoJSON(),
     url: function (extent) {
       return (
-        'http://localhost:8080/geoserver/wfs?' +
+        'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/wfs?' + //ngrok can be used here 10/10/25
         'service=WFS&' +
         'version=1.1.0&' +
         'request=GetFeature&' +
@@ -426,6 +424,7 @@ function updateRoadFilter() {
   });
 }
 
+
 //road name visibility
 
 
@@ -548,6 +547,7 @@ legendToggleBtn.addEventListener("click", function() {
 legendDiv.classList.add("minimized");
 legendToggleBtn.textContent = "+";
 legendToggleBtn.title = "Maximize Legend";
+
 
 // =========================================================================  
 // END OF SCRIPT
