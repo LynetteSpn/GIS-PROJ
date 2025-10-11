@@ -89,7 +89,7 @@ const roadLayer = new ol.layer.Vector({
         'typeName=rmisv2db_prod:gis_sabah_centerline&' +
         'outputFormat=application/json&' +
         'srsName=EPSG:3857&' +
-        'bbox=' + extent.join(',') + ',EPSG:3857&'
+        'bbox=' + extent.join(',') + ',EPSG:3857'
       );
     },
     strategy: ol.loadingstrategy.bbox
