@@ -95,7 +95,6 @@ const roadLayer = new ol.layer.Vector({
     strategy: ol.loadingstrategy.bbox
   }),
   style: roadStyle,
-  minZoom: 9
 });
 
 // =========================================================================
