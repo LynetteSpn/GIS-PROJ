@@ -11,53 +11,55 @@
         <div id="map" class="map"></div>
 
         <div id="toolbar" class="toolbar">
+             <button id="minimize-toolbar" title="Minimize Toolbar">-</button>
+            <div id="toolbar-content" class="toolbar-content">
+                    <div id="toolbar-title" class="toolbar-title">Search</div>
 
-            <div id="toolbar-title" class="toolbar-title">Search</div>
+                    <select id="districtFilter" title="Filter by District">
+                            <option value="" disabled selected>Select District</option>
+                            <option value="ALL">ALL DISTRICTS</option>
+                            <option value="17">Beaufort</option>
+                            <option value="08">Beluran</option>
+                            <option value="28">Beluran</option>
+                            <option value="13">Keningau</option>
+                            <option value="09">Kinabatangan</option>
+                            <option value="03">Kota Belud</option>
+                            <option value="01">Kota Kinabalu</option>
+                            <option value="22">Kota Marudu</option>
+                            <option value="18">Kuala Penyu</option>
+                            <option value="05">Kudat</option>
+                            <option value="24">Kunak</option>
+                            <option value="11">Lahad Datu</option>
+                            <option value="15">Nabawan</option>
+                            <option value="02">Papar</option>
+                            <option value="21">Penampang</option>
+                            <option value="23">Pitas</option>
+                            <option value="27">Putatan</option>
+                            <option value="06">Ranau</option>
+                            <option value="07">Sandakan</option>
+                            <option value="12">Semporna</option>
+                            <option value="19">Sipitang</option>
+                            <option value="14">Tambunan</option>
+                            <option value="10">Tawau</option>
+                            <option value="16">Tenom</option>
+                            <option value="25">Tongod</option>
+                            <option value="04">Tuaran</option>
+                        </select>
 
-            <select id="districtFilter" title="Filter by District">
-                    <option value="" disabled selected>Select District</option>
-                    <option value="ALL">ALL DISTRICTS</option>
-                    <option value="17">Beaufort</option>
-                    <option value="08">Beluran</option>
-                    <option value="28">Beluran</option>
-                    <option value="13">Keningau</option>
-                    <option value="09">Kinabatangan</option>
-                    <option value="03">Kota Belud</option>
-                    <option value="01">Kota Kinabalu</option>
-                    <option value="22">Kota Marudu</option>
-                    <option value="18">Kuala Penyu</option>
-                    <option value="05">Kudat</option>
-                    <option value="24">Kunak</option>
-                    <option value="11">Lahad Datu</option>
-                    <option value="15">Nabawan</option>
-                    <option value="02">Papar</option>
-                    <option value="21">Penampang</option>
-                    <option value="23">Pitas</option>
-                    <option value="27">Putatan</option>
-                    <option value="06">Ranau</option>
-                    <option value="07">Sandakan</option>
-                    <option value="12">Semporna</option>
-                    <option value="19">Sipitang</option>
-                    <option value="14">Tambunan</option>
-                    <option value="10">Tawau</option>
-                    <option value="16">Tenom</option>
-                    <option value="25">Tongod</option>
-                    <option value="04">Tuaran</option>
-                </select>
+                    <select id="filterBy" class="filterBy" onchange="filterBy(this.value)">
+                        <option value="" disabled selected>Search By</option>
+                        <option value="road_name">Road Name</option>
+                        <option value="pkm_road_id">PKM ID</option>
+                        <option value="marris_id">Marris ID</option>
+                    </select>
 
-            <select id="filterBy" class="filterBy" onchange="filterBy(this.value)">
-                <option value="" disabled selected>Search By</option>
-                <option value="road_name">Road Name</option>
-                <option value="pkm_road_id">PKM ID</option>
-                <option value="marris_id">Marris ID</option>
-            </select>
+                    <div class="search-wrapper"> 
+                        <input type="text" id="roadSearch" placeholder="Search Road Name">
+                        <div id="autocomplete-list" class="autocomplete-items"></div>
+                    </div>
 
-             <div class="search-wrapper"> 
-                <input type="text" id="roadSearch" placeholder="Search Road Name">
-                <div id="autocomplete-list" class="autocomplete-items"></div>
+                    <button id="resetButton" title="Reset Filters">Reset</button>
             </div>
-
-            <button id="resetButton" title="Reset Filters">Reset</button>
         </div>
 
         <div id="side-toolbar" class="side-toolbar">
@@ -66,16 +68,17 @@
         </div>
 
        <div id="legend" class="legend">
-        <button id="minimize-legend" title="Minimize Legend">+</button>
+        <button id="minimize-legend" title="Minimize Legend">-</button>
             <div class="legend-content">
                 <b>LEGEND</b>
                 <!-- Legend items will be appended here dynamically -->
             </div>
         </div>
 
-
         <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
         <script src="rmis.js"></script> 
+    
+        
     
     </body>
 </html>

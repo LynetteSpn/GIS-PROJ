@@ -81,20 +81,24 @@ const roadLayer = new ol.layer.Vector({
   source: new ol.source.Vector({
     format: new ol.format.GeoJSON(),
     url: function (extent) {
-      return (
-        'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/wfs?' + //ngrok can be used here 10/10/25
+      const url =
+        'http://localhost:8080/geoserver/wfs?' + //ngrok can be used here 10/10/25
         'service=WFS&' +
         'version=1.1.0&' +
         'request=GetFeature&' +
         'typeName=rmisv2db_prod:gis_sabah_centerline&' +
         'outputFormat=application/json&' +
         'srsName=EPSG:4326&' +
-        'bbox=' + extent.join(',') + ',EPSG:4326'
-      );
+        'bbox=' + extent.join(',') + ',EPSG:4326';
+
+        console.log('WFS URL requested:', url); // <-- Add this line
+
+      return url;
     },
     strategy: ol.loadingstrategy.bbox
   }),
   style: roadStyle,
+
 });
 
 // =========================================================================
@@ -296,6 +300,18 @@ document.addEventListener("click", function (e) {
         autocompleteList.innerHTML = "";
     }
 });
+
+
+const toolbar = document.getElementById("toolbar");
+const minimizeToolbarBtn = document.getElementById("minimize-toolbar");
+let isToolbarMinimized = false;
+minimizeToolbarBtn.addEventListener("click", function() {
+  isToolbarMinimized = !isToolbarMinimized;
+  toolbar.classList.toggle("minimized", isToolbarMinimized);
+  minimizeToolbarBtn.textContent = isToolbarMinimized ? "+" : "-";
+  minimizeToolbarBtn.title = isToolbarMinimized ? "Maximize Toolbar" : "Minimize Toolbar";
+});
+
 
 // =========================================================================
 // zoomToRoad FUNCTION (Fetches geometry on demand)
@@ -533,7 +549,7 @@ for (const [layerType, color] of Object.entries(roadColors)) {
 
 // 9B. Legend toggle logic
 const legendToggleBtn = document.getElementById("minimize-legend");
-let isLegendMinimized = true;
+let isLegendMinimized = false;
 legendToggleBtn.addEventListener("click", function() {
   isLegendMinimized = !isLegendMinimized;
   legendDiv.classList.toggle("minimized", isLegendMinimized);
@@ -542,10 +558,8 @@ legendToggleBtn.addEventListener("click", function() {
   legendToggleBtn.title = isLegendMinimized ? "Maximize Legend" : "Minimize Legend";
 });
 
-// Initial state
-legendDiv.classList.add("minimized");
-legendToggleBtn.textContent = "+";
-legendToggleBtn.title = "Maximize Legend";
+
+
 
 
 // =========================================================================  
