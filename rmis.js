@@ -163,7 +163,7 @@ const map = new ol.Map({
   target: 'map',
   layers: [baseGroup, districtLayer, roadLayer, highlightLayer], // use roadLayer, not roadWMSLayer!
   view: new ol.View({
-    center: ol.proj.fromLonLat([116.0735, 5.9804]),
+    center: ol.proj.fromLonLat([117.04304, 5.21470]),
     zoom: 8
   })
 });
@@ -317,8 +317,8 @@ centerBtn.addEventListener('click', function() {
   centerBtn.classList.toggle('active', centerOnClick);
 
   // Recenter map on button click (as defined in your original code)
-  map.getView().setCenter(ol.proj.fromLonLat([116.0735, 6.0000])); 
-  map.getView().setZoom(10); 
+  map.getView().setCenter(ol.proj.fromLonLat([117.04304, 5.21470])); 
+  map.getView().setZoom(8); 
 });
 
 map.on('click', function(evt) {
