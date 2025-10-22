@@ -79,26 +79,18 @@ function roadStyle(feature) {
 // =========================================================================
 const roadLayer = new ol.layer.Vector({
   source: new ol.source.Vector({
-    format: new ol.format.GeoJSON(),
-    url: function (extent) {
-      const url =
-        'http://localhost:8080/geoserver/wfs?' + //ngrok can be used here 10/10/25
-        'service=WFS&' +
-        'version=1.1.0&' +
-        'request=GetFeature&' +
-        'typeName=rmisv2db_prod:gis_sabah_centerline&' +
-        'outputFormat=application/json&' +
-        'srsName=EPSG:4326&' +
-        'bbox=' + extent.join(',') + ',EPSG:4326';
-
-        console.log('WFS URL requested:', url); // <-- Add this line
-
-      return url;
-    },
-    strategy: ol.loadingstrategy.bbox
+    url: 'district_17.geojson', // <-- your local GeoJSON file
+    format: new ol.format.GeoJSON()
   }),
   style: roadStyle,
+});
 
+roadLayer.getSource().on('change', function() {
+  if (roadLayer.getSource().getState() === 'ready') {
+    // Now search/filter is enabled!
+    // Optionally, enable your search input here
+    console.log('Road GeoJSON loaded:', roadLayer.getSource().getFeatures().length, 'features');
+  }
 });
 
 // =========================================================================
@@ -106,10 +98,10 @@ const roadLayer = new ol.layer.Vector({
 // =========================================================================
 const roadWMSLayer = new ol.layer.Tile({
   source: new ol.source.TileWMS({
-    url: 'http://localhost:8080/geoserver/rmisv2db_prod/wms',
+    url: 'https://10.1.4.18:3000/geoserver/rmisv2db_prod/wms',
     params: {
       'LAYERS': 'rmisv2db_prod:gis_sabah_centerline',
-      'STYLES': 'road_style',
+      'STYLES' : 'road_style',
       'TILED': true
     },
     serverType: 'geoserver',
@@ -121,7 +113,7 @@ const roadWMSLayer = new ol.layer.Tile({
 
 const districtLayer = new ol.layer.Vector({
   source: new ol.source.Vector({
-    url: 'sabah_district.geojson',
+    url: './sabah_district.geojson',
     format: new ol.format.GeoJSON()
   }),
   style: satelliteDistrictStyle,
@@ -169,7 +161,7 @@ const highlightLayer = new ol.layer.Vector({
 // =========================================================================
 const map = new ol.Map({
   target: 'map',
-  layers: [baseGroup, districtLayer, roadWMSLayer, highlightLayer], // Add layers here
+  layers: [baseGroup, districtLayer, roadLayer, highlightLayer], // use roadLayer, not roadWMSLayer!
   view: new ol.View({
     center: ol.proj.fromLonLat([116.0735, 5.9804]),
     zoom: 8
@@ -222,50 +214,14 @@ const autocompleteList = document.getElementById("autocomplete-list");
 
 // This function will asynchronously fetch road names based on the current search text
 function fetchRoadNames(searchText) {
-    const WFS_URL = 'http://localhost:8080/geoserver/rmisv2db_prod/wfs?';
-    const isRoadName = (currentSearchField === 'road_name');
-    const operator = isRoadName ? 'ILIKE' : 'LIKE'; 
-    const startWildcard = isRoadName ? `%` : ``; // Wildcard at the start only for Road Name
-    const endWildcard   = `%`;                    // Always use wildcard at the end for autocomplete
-
-    // Construct the raw CQL filter string - THIS LINE IS THE KEY FIX!
-    const rawCqlFilter = `${currentSearchField} ${operator} '${startWildcard}${searchText}${endWildcard}'`;
-
-    // Safely encode the filter for the URL
-    const encodedCqlFilter = encodeURIComponent(rawCqlFilter);
-
-    // Build the final request URL... (rest of the function remains the same)
-    const requestUrl = WFS_URL +
-        'service=WFS&version=1.1.0&request=GetFeature&' +
-        'typeName=rmisv2db_prod:gis_sabah_centerline&' +
-        'outputFormat=application/json&srsName=EPSG:4326&' + 
-        'maxFeatures=10&' +
-        `cql_filter=${encodedCqlFilter}`;
-        
-    // Use a standard fetch request
-    fetch(requestUrl)
-        .then(response => {
-            // ... error handling ...
-            if (!response.ok) {
-                throw new Error(`GeoServer request failed with status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            const features = new ol.format.GeoJSON().readFeatures(data);
-            let results = [];
-
-            if (features.length > 0) {
-                // Extract the value of the currently selected field (e.g., road_name, pkm_id, etc.)
-                results = [...new Set(features.map(f => f.get(currentSearchField)).filter(n => n))];
-            }
-            
-            // Render the extracted results (which could be IDs or names)
-            renderAutocomplete(results, currentSearchField); 
-        })
-        .catch(error => {
-            console.error("Error during WFS search:", error);
-        });
+  // Get features from the loaded roadLayer
+  const allFeatures = roadLayer.getSource().getFeatures();
+  const results = [...new Set(
+    allFeatures
+      .filter(f => (f.get(currentSearchField) || '').toLowerCase().includes(searchText.toLowerCase()))
+      .map(f => f.get(currentSearchField))
+  )];
+  renderAutocomplete(results, currentSearchField);
 }
 
 function renderAutocomplete(results, fieldName) {
@@ -301,76 +257,44 @@ document.addEventListener("click", function (e) {
     }
 });
 
-
 const toolbar = document.getElementById("toolbar");
 const minimizeToolbarBtn = document.getElementById("minimize-toolbar");
 let isToolbarMinimized = false;
 minimizeToolbarBtn.addEventListener("click", function() {
   isToolbarMinimized = !isToolbarMinimized;
   toolbar.classList.toggle("minimized", isToolbarMinimized);
-  minimizeToolbarBtn.textContent = isToolbarMinimized ? "+" : "-";
-  minimizeToolbarBtn.title = isToolbarMinimized ? "Maximize Toolbar" : "Minimize Toolbar";
+  if (isToolbarMinimized) {
+    minimizeToolbarBtn.innerHTML = '<img src="search.png" alt="Search" style="width:20px;height:20px;">';
+    minimizeToolbarBtn.title = "Maximize Toolbar";
+  } else {
+    minimizeToolbarBtn.innerHTML = "-";
+    minimizeToolbarBtn.title = "Minimize Toolbar";
+  }
 });
-
 
 // =========================================================================
 // zoomToRoad FUNCTION (Fetches geometry on demand)
 // =========================================================================
 function zoomToFeature(value, fieldName) {
-    highlightLayer.getSource().clear();
+  highlightLayer.getSource().clear();
+  const allFeatures = roadLayer.getSource().getFeatures();
+  const feature = allFeatures.find(f => f.get(fieldName) === value);
 
-    // 1. Construct the filter using the dynamic field name and value
-    const filter = `${fieldName}='${value}'`; // e.g., pkm_id='1234' or road_name='Jalan ABC'
-    
-    // ... rest of the WFS URL construction using 'filter' ...
-    const WFS_URL = 'http://localhost:8080/geoserver/rmisv2db_prod/wfs?' +
-                    'service=WFS&version=1.1.0&request=GetFeature&' +
-                    'typeName=rmisv2db_prod:gis_sabah_centerline&' + 
-                    'outputFormat=application/json&' +
-                    'srsName=EPSG:3857&' +
-                    `cql_filter=${encodeURIComponent(filter)}`; 
+  if (feature) {
+    const originalColor = roadColors[feature.get('layer')] || 'black';
+    const roadClone = feature.clone();
+    roadClone.set('highlight_color', originalColor);
 
-    fetch(WFS_URL)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            const features = new ol.format.GeoJSON().readFeatures(data, {
-                dataProjection: 'EPSG:3857', 
-                featureProjection: 'EPSG:3857' 
-            });
-            
-            const road = features[0]; 
+    highlightLayer.getSource().addFeature(roadClone);
 
-            if (road) {
-                const originalColor = roadColors[road.get('layer')] || 'black';
-                const roadClone = road.clone();
-                roadClone.set('highlight_color', originalColor);
-
-                highlightLayer.getSource().addFeature(roadClone);
-
-                map.getView().fit(road.getGeometry().getExtent(), {
-                    duration: 1000,
-                    padding: [50, 50, 50, 50]
-                });
-            } else {
-                console.warn(`Geometry for road '${name}' not found.`);
-            }
-        })
-        .catch(error => {
-            console.error("Error fetching road geometry. Check CORS and server logs:", error);
-        });
+    map.getView().fit(feature.getGeometry().getExtent(), {
+      duration: 1000,
+      padding: [50, 50, 50, 50]
+    });
+  } else {
+    console.warn(`Geometry for road '${value}' not found.`);
+  }
 }
-
-document.addEventListener("click", function (e) {
-    if (e.target !== roadSearchInput) {
-        autocompleteList.innerHTML = "";
-    }
-});
-
 
 // Reset button logic
 document.getElementById("resetButton").addEventListener("click", function() {
@@ -420,23 +344,20 @@ map.on('click', function(evt) {
 let currentFilter = "ALL";
 
 
+function localRoadFilterStyle(feature) {
+  const roadType = feature.get('layer');
+  const districtCode = feature.get('district_code');
+  if (
+    activeRoadTypes.has(roadType) &&
+    (currentDistrict === "ALL" || districtCode === currentDistrict)
+  ) {
+    return roadStyle(feature);
+  }
+  return null; // Hide this feature
+}
+
 function updateRoadFilter() {
-  let clauses = [];
-
-  if (activeRoadTypes.size > 0) {
-    const typeClauses = Array.from(activeRoadTypes).map(t => `layer='${t}'`);
-    clauses.push(`(${typeClauses.join(" OR ")})`);
-  } else {
-    clauses.push("1=0"); // hide all if none selected
-  }
-
-  if (currentDistrict !== "ALL") {
-    clauses.push(`district_code='${currentDistrict}'`);
-  }
-
-  roadWMSLayer.getSource().updateParams({
-    CQL_FILTER: clauses.join(" AND ")
-  });
+  roadLayer.setStyle(localRoadFilterStyle); // Re-apply style with new filter
 }
 
 
@@ -558,15 +479,13 @@ legendToggleBtn.addEventListener("click", function() {
   legendToggleBtn.title = isLegendMinimized ? "Maximize Legend" : "Minimize Legend";
 });
 
-
-
+// Initial state
+legendDiv.classList.remove("minimized");
+legendToggleBtn.textContent = "-";
+legendToggleBtn.title = "Minimized Legend";
 
 
 // =========================================================================  
 // END OF SCRIPT
 // =========================================================================
 
-
-
-
-  
