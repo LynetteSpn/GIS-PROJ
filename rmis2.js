@@ -132,3 +132,69 @@ map.on('singleclick', function (evt) {
     hideRoadInfo();
   }
 });
+
+// Locate me feature
+let locationLayer = null;
+let locateActive = false; // track toggle state
+
+const locateBtn = document.getElementById('locate-btn');
+
+locateBtn.addEventListener('click', () => {
+  locateActive = !locateActive; // toggle
+
+  if (locateActive) {
+    locateBtn.classList.add('active'); // add visual highlight
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const coords = [pos.coords.longitude, pos.coords.latitude];
+        const transformed = ol.proj.fromLonLat(coords);
+
+        // Remove old layer if exists
+        if (locationLayer) {
+          map.removeLayer(locationLayer);
+        }
+
+        // Create new marker
+        const marker = new ol.Feature({
+          geometry: new ol.geom.Point(transformed),
+        });
+
+        const markerStyle = new ol.style.Style({
+          image: new ol.style.Circle({
+            radius: 6,
+            fill: new ol.style.Fill({ color: 'rgba(0, 150, 255, 0.9)' }),
+            stroke: new ol.style.Stroke({ color: '#fff', width: 2.5 })
+          }),
+        });
+        marker.setStyle(markerStyle);
+
+        // Add marker to layer
+        locationLayer = new ol.layer.Vector({
+          source: new ol.source.Vector({
+            features: [marker],
+          }),
+        });
+        map.addLayer(locationLayer);
+
+        // Zoom to location
+        map.getView().animate({
+          center: transformed,
+          zoom: 16,
+          duration: 1000
+        });
+      });
+    } else {
+      alert("Geolocation not supported by your browser.");
+    }
+
+  } else {
+    locateBtn.classList.remove('active');
+    // Remove marker if toggled off
+    if (locationLayer) {
+      map.removeLayer(locationLayer);
+      locationLayer = null;
+    }
+  }
+});
+
