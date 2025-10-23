@@ -29,6 +29,24 @@
 // }
 // });
 
+// Sidebar minimize/maximize toggle
+const sidebar = document.getElementById('side-toolbar');
+const minimizeSidebarBtn = document.getElementById('minimize-sidebar');
+
+minimizeSidebarBtn.addEventListener('click', () => {
+  sidebar.classList.toggle('minimized');
+
+  // Change button symbol for clarity
+  if (sidebar.classList.contains('minimized')) {
+    minimizeSidebarBtn.textContent = '+';
+    minimizeSidebarBtn.title = 'Show Sidebar';
+  } else {
+    minimizeSidebarBtn.textContent = '-';
+    minimizeSidebarBtn.title = 'Hide Sidebar';
+  }
+});
+
+
 const popupElement = document.getElementById('road-popup');
 const popupContent = document.getElementById('road-popup-content');
 const popupCloser = document.getElementById('road-popup-closer');
