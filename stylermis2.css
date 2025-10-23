@@ -1,0 +1,42 @@
+/* .ol-tooltip{
+    position: absolute;
+    background: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-size: 13px;
+    pointer-events: none;
+    transform: translateY(-15px);
+} */
+
+.ol-popup {
+  position: absolute;
+  background: white;
+  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  min-width: 200px;
+  max-width: 300px;
+  transform: translateY(-15px);
+  display: none;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.ol-popup-closer {
+  text-decoration: none;
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #555;
+  cursor: pointer;
+}
+
+.ol-popup-closer:hover {
+  color: #000;
+}
+

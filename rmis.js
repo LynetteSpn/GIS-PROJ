@@ -84,6 +84,8 @@ const roadLayer = new ol.layer.Vector({
   }),
   style: roadStyle,
 });
+roadLayer.set('name', 'roadLayer');
+
 
 roadLayer.getSource().on('change', function() {
   if (roadLayer.getSource().getState() === 'ready') {
@@ -264,7 +266,7 @@ minimizeToolbarBtn.addEventListener("click", function() {
   isToolbarMinimized = !isToolbarMinimized;
   toolbar.classList.toggle("minimized", isToolbarMinimized);
   if (isToolbarMinimized) {
-    minimizeToolbarBtn.innerHTML = '<img src="search.png" alt="Search" style="width:20px;height:20px;">';
+    minimizeToolbarBtn.innerHTML = '<img src="search.png" alt="Search" style="width:17px;height:17px;">';
     minimizeToolbarBtn.title = "Maximize Toolbar";
   } else {
     minimizeToolbarBtn.innerHTML = "-";
@@ -357,9 +359,23 @@ function localRoadFilterStyle(feature) {
 }
 
 function updateRoadFilter() {
-  roadLayer.setStyle(localRoadFilterStyle); // Re-apply style with new filter
+  roadLayer.setStyle(finalRoadStyle); // Re-apply style with new filter
 }
 
+// Combine the logic into one clear function
+function finalRoadStyle(feature) {
+    const roadType = feature.get('layer');
+    const districtCode = feature.get('district_code');
+    
+    const isRoadTypeActive = activeRoadTypes.has(roadType);
+    const isDistrictActive = (currentDistrict === "ALL" || districtCode === currentDistrict);
+
+    if (isRoadTypeActive && isDistrictActive) {
+        // Use the base roadStyle defined earlier
+        return roadStyle(feature);
+    }
+    return null; // Hide the feature
+}
 
 //road name visibility
 
@@ -408,7 +424,7 @@ document.getElementById("districtFilter").addEventListener("change", function(e)
   districtLayer.setStyle(districtFilterStyle);
 
   // apply combined filter on WMS roads
-  updateRoadFilter(currentFilter);
+  updateRoadFilter();
 
   if (currentDistrict !== "ALL") {
     const features = districtLayer.getSource().getFeatures();
@@ -484,6 +500,20 @@ legendDiv.classList.remove("minimized");
 legendToggleBtn.textContent = "-";
 legendToggleBtn.title = "Minimized Legend";
 
+
+//Latitude and Longitude display on mouse move
+map.on('pointermove', function (evt) {
+  const coord = ol.proj.toLonLat(evt.coordinate);
+  const lon = coord[0].toFixed(5);
+  const lat = coord[1].toFixed(5);
+
+  document.getElementById('coords').innerHTML = `Lat: ${lat}, Lng: ${lon}`;
+});
+
+// At the absolute bottom of rmis.js
+if (typeof initTooltipLogic === 'function') {
+    initTooltipLogic();
+}
 
 // =========================================================================  
 // END OF SCRIPT
