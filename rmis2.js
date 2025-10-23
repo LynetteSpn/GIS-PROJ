@@ -135,66 +135,97 @@ map.on('singleclick', function (evt) {
 
 // Locate me feature
 let locationLayer = null;
-let locateActive = false; // track toggle state
+let locateActive = false; // toggle state
 
 const locateBtn = document.getElementById('locate-btn');
 
 locateBtn.addEventListener('click', () => {
-  locateActive = !locateActive; // toggle
+  // Toggle state
+  locateActive = !locateActive;
 
   if (locateActive) {
-    locateBtn.classList.add('active'); // add visual highlight
+    locateBtn.classList.add('active');
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const coords = [pos.coords.longitude, pos.coords.latitude];
-        const transformed = ol.proj.fromLonLat(coords);
+    // Check if geolocation available
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = [pos.coords.longitude, pos.coords.latitude];
+          const transformed = ol.proj.fromLonLat(coords);
 
-        // Remove old layer if exists
-        if (locationLayer) {
-          map.removeLayer(locationLayer);
+          // Remove old layer if exists
+          if (locationLayer) {
+            map.removeLayer(locationLayer);
+          }
+
+          // Create new marker
+          const marker = new ol.Feature({
+            geometry: new ol.geom.Point(transformed),
+          });
+
+          const markerStyle = new ol.style.Style({
+            image: new ol.style.Circle({
+              radius: 6,
+              fill: new ol.style.Fill({ color: 'rgba(0, 150, 255, 0.9)' }),
+              stroke: new ol.style.Stroke({ color: '#fff', width: 2.5 }),
+            }),
+          });
+          marker.setStyle(markerStyle);
+
+          // Create new vector layer for marker
+          locationLayer = new ol.layer.Vector({
+            source: new ol.source.Vector({
+              features: [marker],
+            }),
+          });
+          map.addLayer(locationLayer);
+
+          // Animate zoom to user position
+          map.getView().animate({
+            center: transformed,
+            zoom: 16,
+            duration: 1000,
+          });
+        },
+        (error) => {
+          // Handle error properly
+          let msg = '';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              msg = 'Location permission denied.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              msg = 'Location unavailable.';
+              break;
+            case error.TIMEOUT:
+              msg = 'Location request timed out.';
+              break;
+            default:
+              msg = 'Unable to retrieve location.';
+          }
+          alert(msg);
+          locateBtn.classList.remove('active');
+          locateActive = false;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         }
-
-        // Create new marker
-        const marker = new ol.Feature({
-          geometry: new ol.geom.Point(transformed),
-        });
-
-        const markerStyle = new ol.style.Style({
-          image: new ol.style.Circle({
-            radius: 6,
-            fill: new ol.style.Fill({ color: 'rgba(0, 150, 255, 0.9)' }),
-            stroke: new ol.style.Stroke({ color: '#fff', width: 2.5 })
-          }),
-        });
-        marker.setStyle(markerStyle);
-
-        // Add marker to layer
-        locationLayer = new ol.layer.Vector({
-          source: new ol.source.Vector({
-            features: [marker],
-          }),
-        });
-        map.addLayer(locationLayer);
-
-        // Zoom to location
-        map.getView().animate({
-          center: transformed,
-          zoom: 16,
-          duration: 1000
-        });
-      });
+      );
     } else {
-      alert("Geolocation not supported by your browser.");
+      alert('Geolocation not supported on this device.');
+      locateBtn.classList.remove('active');
+      locateActive = false;
     }
-
   } else {
+    // If toggled off, remove marker and layer
     locateBtn.classList.remove('active');
-    // Remove marker if toggled off
     if (locationLayer) {
       map.removeLayer(locationLayer);
       locationLayer = null;
     }
   }
 });
+
 
