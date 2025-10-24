@@ -1,43 +1,14 @@
-// const tooltipElement = document.getElementById('road-tooltip');
-// const tooltip = new ol.Overlay({
-//     element: tooltipElement,
-//     offset: [10, 0],
-//     positioning: 'bottom-left'
-// });
-// map.addOverlay(tooltip);
-// map.on('pointermove', function (evt){
-//     if (evt.dragging){
-//         tooltipElement.style.display = 'none';
-//         return;
-//     }
-// const pixel = map.getEventPixel(evt.originalEvent);
-// const feature = map.forEachFeatureAtPixel(pixel, function (feature, layer){
-//     if(layer && layer.get('name')==='roadLayer'){
-//         return feature;
-//     }
-// });
-
-// const { act } = require("react");
-
-// if (feature){
-//     const roadName = feature.get('road_name') || feature.get('name') || 'Unknown Road';
-//     tooltipElement.innerHTML = roadName;
-//     tooltip.setPosition(evt.coordinate);
-//     tooltipElement.style.display = 'block';
-// } else {
-//     tooltipElement.style.display = 'none';
-// }
-// });
-
-// Sidebar minimize/maximize toggle
+// =========================================================================
+// 11. SIDEBAR MINIMIZE/EXPAND
+// =========================================================================
 const sidebar = document.getElementById('side-toolbar');
 const minimizeSidebarBtn = document.getElementById('minimize-sidebar');
 
-minimizeSidebarBtn.addEventListener('click', () => {
+minimizeSidebarBtn.addEventListener('click', () => { // Toggle sidebar class
   sidebar.classList.toggle('minimized');
 
-  // Change button symbol for clarity
-  if (sidebar.classList.contains('minimized')) {
+  // Change button symbol for clarity, toggle the -/+ sign to indicate action
+  if (sidebar.classList.contains('minimized')) { 
     minimizeSidebarBtn.textContent = '+';
     minimizeSidebarBtn.title = 'Show Sidebar';
   } else {
@@ -46,6 +17,11 @@ minimizeSidebarBtn.addEventListener('click', () => {
   }
 });
 
+// =========================================================================
+// 12. TOOLTIP POPUP FOR ROAD INFO
+// =========================================================================
+// DESKTOP: hover to show popup, click to lock popup
+// MOBILE: tap to show and lock popup
 
 const popupElement = document.getElementById('road-popup');
 const popupContent = document.getElementById('road-popup-content');
@@ -70,7 +46,8 @@ function showRoadInfo(feature, coordinate) {
     return; // Skip district layers
   }
 
-  const allowedKeys = ['road_name', 'district_code', 'layer'];
+  // Build HTML content, the allowed keys fetched from feature properties (data of geojson)
+  const allowedKeys = ['road_name', 'district_code', 'layer']; //attributes to show
   let html = '<b>Road Information</b><hr>';
 
   allowedKeys.forEach(key => {
@@ -78,7 +55,7 @@ function showRoadInfo(feature, coordinate) {
       const displayKey = key.replace('_', ' ').toUpperCase();
       let value = props[key];
 
-      if (key === 'layer' && value === 'UNID') {
+      if (key === 'layer' && value === 'UNID') { 
         value = 'Unregistered Road';
       }
 
@@ -103,7 +80,7 @@ popupCloser.onclick = function (evt) {
   hideRoadInfo();
 };
 
-// 🖱️ Desktop hover — only show when not locked
+// Desktop hover — only show when not locked
 map.on('pointermove', function (evt) {
   if (evt.dragging || lockedPopup) return;
 
@@ -119,7 +96,7 @@ map.on('pointermove', function (evt) {
   }
 });
 
-// 📱 Mobile & click — lock popup
+// Mobile & click — lock popup
 map.on('singleclick', function (evt) {
   const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
 
@@ -133,7 +110,10 @@ map.on('singleclick', function (evt) {
   }
 });
 
-// Locate me feature
+// =========================================================================
+// 13. LOCATE ME BUTTON 
+// =========================================================================
+
 let locationLayer = null;
 let locateActive = false; // toggle state
 

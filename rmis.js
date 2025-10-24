@@ -216,13 +216,22 @@ const autocompleteList = document.getElementById("autocomplete-list");
 
 // This function will asynchronously fetch road names based on the current search text
 function fetchRoadNames(searchText) {
-  // Get features from the loaded roadLayer
   const allFeatures = roadLayer.getSource().getFeatures();
+
+  // Filter roads that match BOTH the search text AND the selected district
   const results = [...new Set(
     allFeatures
-      .filter(f => (f.get(currentSearchField) || '').toLowerCase().includes(searchText.toLowerCase()))
+      .filter(f => {
+        const fieldValue = (f.get(currentSearchField) || '').toLowerCase();
+        const districtCode = f.get('district_code');
+        const matchesText = fieldValue.includes(searchText.toLowerCase());
+        const matchesDistrict =
+          currentDistrict === "ALL" || districtCode === currentDistrict;
+        return matchesText && matchesDistrict;
+      })
       .map(f => f.get(currentSearchField))
   )];
+
   renderAutocomplete(results, currentSearchField);
 }
 
@@ -293,6 +302,7 @@ function zoomToFeature(value, fieldName) {
       duration: 1000,
       padding: [50, 50, 50, 50]
     });
+    
   } else {
     console.warn(`Geometry for road '${value}' not found.`);
   }
@@ -420,26 +430,40 @@ function roadDistrictFilterStyle(feature) {
 
 
 document.getElementById("districtFilter").addEventListener("change", function(e) {
-  currentDistrict = e.target.value;
-  districtLayer.setStyle(districtFilterStyle);
+  const selectedDistrictName = e.target.options[e.target.selectedIndex].text; // e.g. "Beaufort"
 
-  // apply combined filter on WMS roads
-  updateRoadFilter();
+  // Clear highlight layer if you use one
+  highlightLayer.getSource().clear();
 
-  if (currentDistrict !== "ALL") {
-    const features = districtLayer.getSource().getFeatures();
-    const district = features.find(f => f.get('district_code') === currentDistrict);
-    if (district) { 
-      map.getView().fit(district.getGeometry().getExtent(), {
-        duration: 1000,
-        padding: [100,100,100,100]
-      });
-    }
-  } else {
+  // Handle "ALL DISTRICTS"
+  if (selectedDistrictName === "ALL DISTRICTS") {
     map.getView().setCenter(ol.proj.fromLonLat([116.0735, 5.9804]));
     map.getView().setZoom(8);
+    return;
+  }
+
+  // Get all district features
+  const districtFeatures = districtLayer.getSource().getFeatures();
+
+  // Find the district by its NAME_2 field
+  const selectedFeature = districtFeatures.find(f => 
+    f.get("NAME_2") && f.get("NAME_2").toLowerCase() === selectedDistrictName.toLowerCase()
+  );
+
+  // If found, zoom to its geometry
+  if (selectedFeature) {
+    const extent = selectedFeature.getGeometry().getExtent();
+    map.getView().fit(extent, {
+      duration: 1000,
+      padding: [80, 80, 80, 80]
+    });
+  } else {
+    console.warn(`District '${selectedDistrictName}' not found in districtLayer.`);
   }
 });
+
+
+
 
 
 
@@ -500,7 +524,9 @@ legendDiv.classList.remove("minimized");
 legendToggleBtn.textContent = "-";
 legendToggleBtn.title = "Minimized Legend";
 
-
+// =========================================================================
+// 10. LATITUDE AND LONGITUDE DISPLAY
+// =========================================================================
 //Latitude and Longitude display on mouse move
 map.on('pointermove', function (evt) {
   const coord = ol.proj.toLonLat(evt.coordinate);
@@ -515,7 +541,5 @@ if (typeof initTooltipLogic === 'function') {
     initTooltipLogic();
 }
 
-// =========================================================================  
-// END OF SCRIPT
-// =========================================================================
+
 
