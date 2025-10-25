@@ -122,6 +122,7 @@ const districtLayer = new ol.layer.Vector({
   minZoom: 0,
   maxZoom: 22
 });
+districtLayer.set('name', 'DistrictLayer');
 
 const highlightLayer = new ol.layer.Vector({
   source: new ol.source.Vector(),
@@ -430,14 +431,14 @@ function roadDistrictFilterStyle(feature) {
 
 
 document.getElementById("districtFilter").addEventListener("change", function(e) {
-  const selectedDistrictName = e.target.options[e.target.selectedIndex].text; // e.g. "Beaufort"
+  const selectedDistrictName = e.target.options[e.target.selectedIndex].text; 
 
   // Clear highlight layer if you use one
   highlightLayer.getSource().clear();
 
   // Handle "ALL DISTRICTS"
   if (selectedDistrictName === "ALL DISTRICTS") {
-    map.getView().setCenter(ol.proj.fromLonLat([116.0735, 5.9804]));
+    map.getView().setCenter(ol.proj.fromLonLat([117.04304, 5.21470]));
     map.getView().setZoom(8);
     return;
   }

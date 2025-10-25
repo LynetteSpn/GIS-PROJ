@@ -23,6 +23,7 @@ minimizeSidebarBtn.addEventListener('click', () => { // Toggle sidebar class
 // DESKTOP: hover to show popup, click to lock popup
 // MOBILE: tap to show and lock popup
 
+// --- Popup setup ---
 const popupElement = document.getElementById('road-popup');
 const popupContent = document.getElementById('road-popup-content');
 const popupCloser = document.getElementById('road-popup-closer');
@@ -38,16 +39,17 @@ map.addOverlay(popup);
 let lockedPopup = false;
 let activeFeature = null;
 
+// --- Road info popup function ---
 function showRoadInfo(feature, coordinate) {
   const props = feature.getProperties();
 
-  // Only show popup for road layer
-  if (props.layer && props.layer.toLowerCase().includes('district')) {
-    return; // Skip district layers
+  // Skip if it's a district feature
+  if (feature.get('layerName') === 'district') {
+    return;
   }
 
-  // Build HTML content, the allowed keys fetched from feature properties (data of geojson)
-  const allowedKeys = ['road_name', 'district_code', 'layer']; //attributes to show
+  // Build HTML content
+  const allowedKeys = ['road_name', 'district_code', 'layer']; // attributes to show
   let html = '<b>Road Information</b><hr>';
 
   allowedKeys.forEach(key => {
@@ -55,11 +57,11 @@ function showRoadInfo(feature, coordinate) {
       const displayKey = key.replace('_', ' ').toUpperCase();
       let value = props[key];
 
-      if (key === 'layer' && value === 'UNID') { 
+      if (key === 'layer' && value === 'UNID') {
         value = 'Unregistered Road';
       }
 
-      html += `<b>${displayKey}:</b> ${props[key]}<br>`;
+      html += `<b>${displayKey}:</b> ${value}<br>`;
     }
   });
 
@@ -80,35 +82,43 @@ popupCloser.onclick = function (evt) {
   hideRoadInfo();
 };
 
-// Desktop hover — only show when not locked
+// --- Hover popup (desktop) ---
 map.on('pointermove', function (evt) {
   if (evt.dragging || lockedPopup) return;
 
-  const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+  const feature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
+    // Ignore district layer
+    if (layer && layer.get('name') === 'DistrictLayer') return null;
+    return f;
+  });
+
   if (feature !== activeFeature) {
     activeFeature = feature;
     if (feature) {
-      const coordinate = evt.coordinate;
-      showRoadInfo(feature, coordinate);
+      showRoadInfo(feature, evt.coordinate);
     } else {
       hideRoadInfo();
     }
   }
 });
 
-// Mobile & click — lock popup
+// --- Click popup (mobile / locked) ---
 map.on('singleclick', function (evt) {
-  const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+  const feature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
+    // Ignore district layer
+    if (layer && layer.get('name') === 'DistrictLayer') return null;
+    return f;
+  });
 
   if (feature) {
-    const coordinate = evt.coordinate;
-    showRoadInfo(feature, coordinate);
+    showRoadInfo(feature, evt.coordinate);
     activeFeature = feature;
-    lockedPopup = true; // Lock popup after click
+    lockedPopup = true;
   } else {
     hideRoadInfo();
   }
 });
+
 
 // =========================================================================
 // 13. LOCATE ME BUTTON 
