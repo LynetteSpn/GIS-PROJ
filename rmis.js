@@ -197,7 +197,7 @@ const roadVectorLayer = new ol.layer.Vector({
             
             // Note: Keep the GeoServer URL short; OpenLayers handles the BBOX parameter.
             return (
-                'http://localhost:8080/geoserver/rmisv2db_prod/ows?service=WFS&' +
+                'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/rmisv2db_prod/ows?service=WFS&' +
                 'version=1.0.0&request=GetFeature&typeName=	rmisv2db_prod:1728_district&' +
                 'outputFormat=application/json&' +
                 'srsName=' + srsCode + '&' +
@@ -234,7 +234,7 @@ roadSource.on('vectorloaderror', () => {
 // CHAINAGE LAYER (WMS, controlled by legend)
 const chainageLayer = new ol.layer.Tile({
     source: new ol.source.TileWMS({
-        url: 'http://localhost:8080/geoserver/chainage_bft/wms',
+        url: 'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/chainage_bft/wms',
         params: {
             'LAYERS': 'chainage_bft:gis_chainage_kku_202510280845', // workspace:name
             'TILED': true
