@@ -1,15 +1,3 @@
-/* .ol-tooltip{
-    position: absolute;
-    background: rgba(0, 0, 0, 0.75);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    font-size: 13px;
-    pointer-events: none;
-    transform: translateY(-15px);
-} */
-
 .ol-popup {
   position: absolute;
   background: white;
@@ -59,4 +47,33 @@
 #locate-btn.active {
   background: rgba(0, 255, 150, 0.9);
   box-shadow: 0 0 10px rgba(0, 255, 150, 0.6);
+}
+
+.legend-label-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.expand-btn {
+  background: none;
+  border: none;
+  color: rgb(0, 0, 0);
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+.sub-legend {
+  display: none;
+  flex-direction: column;
+}
+
+.sub-legend-item {
+  font-size: 13px;
+  color: #000000;
+}
+
+div .sub-legend{
+  top: 40px;
 }
