@@ -166,7 +166,12 @@ function districtFilterStyle(feature) {
 const roadLayer = new ol.layer.Tile({
     source: new ol.source.TileWMS({
         url: 'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/rmisv2db_prod/wms',
+        crossOrigin: 'anonymous',
         params: {
+            'REQUEST': 'GetMap',
+            'SERVICE': 'WMS',
+            'VERSION': '1.3.0',
+
             'LAYERS': 'rmisv2db_prod:1728_district',
             'STYLES': 'road_style',
             'TILED': true
