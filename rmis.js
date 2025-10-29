@@ -165,7 +165,7 @@ function districtFilterStyle(feature) {
 // WMS ROAD LAYER (FAST VISUALIZATION - No local feature query)
 const roadLayer = new ol.layer.Tile({
     source: new ol.source.TileWMS({
-        url: 'http://localhost:8080/geoserver/rmisv2db_prod/wms',
+        url: 'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/rmisv2db_prod/wms',
         params: {
             'LAYERS': 'rmisv2db_prod:1728_district',
             'STYLES': 'road_style',
