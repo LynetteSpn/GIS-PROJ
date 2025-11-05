@@ -80,15 +80,35 @@
                 <button id="switchBasemap" title="Switch Basemap"><img src="layers.png"></button>
                 <button id="center-button" title="Exxtend Map"><img src="extend.png"></button>
                 <button id="locate-btn" title="Locate Me"><img src="locate.png"></button>
+                <button id="measure-btn" title="Measure Distance/Area"><img src="measure.png"></button>
             </div>
             <button id="minimize-sidebar" title="Minimize Sidebar">-</button> 
         </div>
 
-       <div id="legend" class="legend">
-        <button id="minimize-legend" title="Minimize Legend">-</button>
+        <div id="legend" class="legend">
+            <button id="minimize-legend" title="Minimize Legend">-</button>
             <div class="legend-content">
                 <b>LEGEND</b>
-                <!-- Legend items will be appended here dynamically -->
+                <div class="layer-group">
+                    <label class="group-label">
+                        <input type="checkbox" id="sabahRoadCheckbox" checked />
+                        <strong>Sabah Roads</strong>
+                        <button id="toggleRoadTypes" class="collapse-toggle" title="Collapse/Expand"><b>-</b></button>
+                    </label>
+                    
+                    <div id="roadTypeItemsContainer" class="layer-list">
+                        </div>
+                    
+                    <div class="layer-list">
+                        <label>
+                            <input type="checkbox" id="chainageCheckbox" class="layer-checkbox" data-layer="chainageLayer" />
+                            <strong>Chainages</strong>
+                            <button id="toggleChainage" class="toggle-group" title="Collapse/Expand"><b>-</b></button>
+                        </label>
+
+                        <div id="chainageTypeItemsContainer" class="layer-list">
+                    </div>
+                </div>
             </div>
         </div>
 

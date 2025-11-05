@@ -5,49 +5,11 @@ const filterOptions = {
     'marris_id': 'Marris ID'
 };
 
-// Global filter variables (initialized here for clarity)
+// Global filter variables
 let currentDistrict = "ALL";
 // Keep track of which road types are currently active (toggled ON)
-let activeRoadTypes = new Set(); // Will be populated in Section 9
-
-// =========================================================================
-// LOADING OVERLAY SETUP
-// =========================================================================
-const loadingOverlay = document.createElement('div');
-loadingOverlay.id = 'loading-overlay';
-loadingOverlay.innerHTML = `
- <div class="spinner"></div>
- <p>Loading road data...</p>
-`;
-document.body.appendChild(loadingOverlay);
-
-// CSS styling
-const style = document.createElement('style');
-style.textContent = `
- #loading-overlay {
- position: fixed;
- top: 0; left: 0;
- width: 100%; height: 100%;
- background: rgba(0,0,0,0.4);
- display: none; /* Starts hidden */
- justify-content: center;
- align-items: center;
- flex-direction: column;
- z-index: 9999;
- color: white;
- font-family: sans-serif;
- }
- .spinner {
- width: 40px;
- height: 40px;
- border: 4px solid #fff;
- border-top: 4px solid #00aaff;
- border-radius: 50%;
- animation: spin 1s linear infinite;
- }
- @keyframes spin { 100% { transform: rotate(360deg); } }
-`;
-document.head.appendChild(style);
+let activeRoadTypes = new Set(); 
+let lastSearchResults = []; // Store last search results for zooming
 
 // =========================================================================
 // 1. BASE LAYERS
@@ -57,11 +19,19 @@ const regularLayer = new ol.layer.Tile({
 });
 
 const satelliteLayer = new ol.layer.Tile({
-    source: new ol.source.XYZ({
-        url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-        attributions: '© Google'
-    })
+  source: new ol.source.XYZ({
+    url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    attributions: '© Google'
+  })
 });
+
+satelliteLayer.getSource().on('tileloaderror', () => {
+  console.warn("Google tile failed; switching to ESRI backup.");
+  satelliteLayer.setSource(new ol.source.XYZ({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  }));
+});
+
 
 const baseGroup = new ol.layer.Group({
     layers: [satelliteLayer, regularLayer]
@@ -71,12 +41,11 @@ satelliteLayer.setVisible(true);
 regularLayer.setVisible(false);
 
 
-
 // =========================================================================
-// 2. STYLES (Must be defined before layers that use them)
+// 2. STYLES 
 // =========================================================================
 
-// --- Base District Styles (No fill initially) ---
+// --- Base District Styles ---
 function osmDistrictStyle(feature) {
     const name = feature.get('NAME_2');
     const style = new ol.style.Style({
@@ -89,7 +58,6 @@ function osmDistrictStyle(feature) {
             overflow: false
         })
     });
-    // Add transparent fill for hover/click detection
     style.setFill(new ol.style.Fill({ color: 'rgba(0,0,0,0.01)' }));
     return style;
 }
@@ -105,7 +73,6 @@ function satelliteDistrictStyle(feature) {
             overflow: false
         })
     });
-    // Add transparent fill for hover/click detection
     style.setFill(new ol.style.Fill({ color: 'rgba(0,0,0,0.01)' }));
     return style;
 }
@@ -120,37 +87,35 @@ const roadColors = {
     'FEDERAL': 'purple'
 };
 
-function roadStyle(feature) {
-    const layer = feature.get('layer');
+// --- Highlight Style (Used for WFS-on-Demand result) ---
+function highlightRoadStyle(feature) {
+    // This style expects the feature to be a full vector feature fetched via WFS
+    const layer = feature.get('layer'); 
     const color = roadColors[layer] || 'black';
-    return new ol.style.Style({
-        stroke: new ol.style.Stroke({ color: color, width: 2 })
-    });
+    const roadName = feature.get('road_name') || '';
+
+    return [
+        new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255, 255, 0, 0.8)', width: 8 }) }),
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: color, width: 3 }),
+            text: new ol.style.Text({
+                text: roadName,
+                font: 'bold 20px Calibri,sans-serif',
+                fill: new ol.style.Fill({ color: '#000' }),
+                stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+                overflow: true,
+                placement: 'line'
+            })
+        })
+    ];
 }
 
-// --- Combined Road Filter Style (CRITICAL: Applied to roadVectorLayer) ---
-function finalRoadStyle(feature) {
-    const roadType = feature.get('layer');
-    const districtCode = feature.get('district_code');
-
-    const isRoadTypeActive = activeRoadTypes.has(roadType);
-    const isDistrictActive = (currentDistrict === "ALL" || districtCode === currentDistrict);
-
-    if (isRoadTypeActive && isDistrictActive) {
-        return roadStyle(feature);
-    }
-    return null; // hide feature
-}
-
-// --- District Highlighting Style (CRITICAL: Applied to districtLayer) ---
+// --- District Filter Style (Applies the highlight fill) ---
 function districtFilterStyle(feature) {
     const districtCode = feature.get('district_code');
-    // Start with the base style (handles stroke/outline/text)
     const style = isSatellite ? satelliteDistrictStyle(feature) : osmDistrictStyle(feature);
 
-    // Highlight the selected district with a visible fill
     if (districtCode === currentDistrict) {
-        // Apply a semi-transparent yellow fill to clearly highlight the selected area
         style.setFill(new ol.style.Fill({ color: 'rgba(255, 255, 0, 0.3)' }));
     }
 
@@ -162,92 +127,39 @@ function districtFilterStyle(feature) {
 // 3. OVERLAY LAYERS
 // =========================================================================
 
-// WMS ROAD LAYER (FAST VISUALIZATION - No local feature query)
-const roadLayer = new ol.layer.Tile({
-    source: new ol.source.TileWMS({
-        url: 'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/rmisv2db_prod/wms',
-        crossOrigin: 'anonymous',
-        params: {
-            'REQUEST': 'GetMap',
-            'SERVICE': 'WMS',
-            'VERSION': '1.3.0',
+// WMS ROAD LAYER (FAST VISUALIZATION - Now handles display at all zoom levels)
+const roadLayerSource = new ol.source.TileWMS({
+    url: 'http://10.1.4.18:8080/geoserver/rmisv2db_prod/wms',
+    params: {
+        'LAYERS': 'rmisv2db_prod:gis_sabah_road_map',
+        'STYLES': 'road_style',
+        'TILED': true,
+        'cql_filter': '1=1' 
+    },
+    useInterimTilesOnError: true,
+    serverType: 'geoserver'
+});
 
-            'LAYERS': 'rmisv2db_prod:1728_district',
-            'STYLES': 'road_style',
-            'TILED': true
-        },
-        serverType: 'geoserver'
-    }),
-    opacity: 1,
-    maxZoom: 9.9 // CRITICAL: Visible only when zoomed out
+const roadLayer = new ol.layer.Tile({
+    source: roadLayerSource,
+    opacity: 1
 });
 roadLayer.set('name', 'RoadLayer');
 
-
-// =========================================================================
-// WFS ROAD LAYER (OPTIMIZED WITH BBOX STRATEGY)
-// =========================================================================
-const roadVectorLayer = new ol.layer.Vector({
-    source: new ol.source.Vector({
-        format: new ol.format.GeoJSON(),
-        // CRITICAL: Use ol.loadingstrategy.bbox to load only the visible extent
-        strategy: ol.loadingstrategy.bbox, 
-        
-        // CRITICAL: Define a function to construct the URL with the current BBOX
-        url: function(extent, resolution, projection) {
-       
-           // OpenLayers provides the current 'extent', 'resolution', and 'projection'.
-            // We use 'extent' to build the BBOX filter.
-            const srsCode = projection.getCode();
-            
-            // Note: Keep the GeoServer URL short; OpenLayers handles the BBOX parameter.
-            return (
-                'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/rmisv2db_prod/ows?service=WFS&' +
-                'version=1.0.0&request=GetFeature&typeName=	rmisv2db_prod:1728_district&' +
-                'outputFormat=application/json&' +
-                'srsName=' + srsCode + '&' +
-                'bbox=' + extent.join(',') + ',' + srsCode // Appends the BBOX filter
-            );
-        }
-    }),
-    style: finalRoadStyle,
-    minZoom: 10, // only visible when zoomed in
-    visible: false // Start hidden
-});
-roadVectorLayer.set('name', 'RoadVectorLayer');
-
-// =========================================================================
-// !!! HOOK INTO WFS VECTOR REQUESTS FOR LOADING OVERLAY 
-// =========================================================================
-//Hook into GeoServer WFS source to show loading overlay
-const roadSource = roadVectorLayer.getSource();
-
-roadSource.on('vectorloadstart', () => {
-    loadingOverlay.style.display = 'flex';
-});
-
-roadSource.on('vectorloadend', () => {
-    loadingOverlay.style.display = 'none';
-});
-
-roadSource.on('vectorloaderror', () => {
-    loadingOverlay.style.display = 'none';
-    alert('Error loading road data from server.');
-});
-
+// REMOVED: roadVectorLayer (the laggy WFS BBOX layer is gone)
 
 // CHAINAGE LAYER (WMS, controlled by legend)
 const chainageLayer = new ol.layer.Tile({
     source: new ol.source.TileWMS({
-        url: 'https://unchagrined-undecomposed-jacob.ngrok-free.dev/geoserver/chainage_bft/wms',
+        url: 'http://10.1.4.18:8080/geoserver/chainage_bft/wms',
         params: {
-            'LAYERS': 'chainage_bft:gis_chainage_kku_202510280845', // workspace:name
+            'LAYERS': 'chainage_bft:gis_chainage_kku_202510280845', 
             'TILED': true
         },
         serverType: 'geoserver'
     }),
     opacity: 1,
-    visible: false // hidden by default
+    visible: false
 });
 chainageLayer.set('name', 'ChainageLayer');
 
@@ -257,7 +169,7 @@ const districtLayer = new ol.layer.Vector({
         url: './sabah_district.geojson',
         format: new ol.format.GeoJSON()
     }),
-    style: districtFilterStyle, // CRITICAL: Applies highlighting logic
+    style: districtFilterStyle,
     minZoom: 0,
     maxZoom: 22
 });
@@ -265,82 +177,112 @@ districtLayer.set('name', 'DistrictLayer');
 
 const highlightLayer = new ol.layer.Vector({
     source: new ol.source.Vector(),
-    // Highlight layer style remains the same
-    style: function (feature) {
-        const featureColor = feature.get('highlight_color') || '#000';
-        const roadName = feature.get('road_name');
-        // ... (rest of highlight style definition)
-        return [
-            new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255, 255, 0, 0.8)', width: 8 }) }),
-            new ol.style.Style({
-                stroke: new ol.style.Stroke({ color: featureColor, width: 3 }),
-                text: new ol.style.Text({
-                    text: roadName || '',
-                    font: 'bold 20px Calibri,sans-serif',
-                    fill: new ol.style.Fill({ color: '#000' }),
-                    stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
-                    overflow: true,
-                    placement: 'line'
-                })
-            })
-        ];
-    }
+    style: highlightRoadStyle
 });
 
+const simplifiedSource = new ol.source.Vector({
+    format: new ol.format.GeoJSON(),
+    url: function (extent,resolution,projection) {
+        const srs = projection.getCode();
+        const bbox = extent.join(',');
+        return `http://10.1.4.18:8080/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:output&outputFormat=application/json&srsName=${srs}&bbox=${bbox},${srs}&maxFeatures=200`;
+    },
+    strategy: ol.loadingstrategy.bbox
+});
+
+const simplifiedLayer = new ol.layer.Vector({
+  source: simplifiedSource,
+  style: function(feature) {
+    // invisible fill, but we can highlight on hover; keep simple or null for invisible
+    return new ol.style.Style({
+      stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0)', width: 1 }),
+      fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' })
+    });
+  },
+  declutter: true
+});
+simplifiedLayer.set('name', 'SimplifiedRoads');
+
+const sabahRoadGroup = new ol.layer.Group({
+    title: 'Sabah Roads',
+    layers: [
+        roadLayer,
+        chainageLayer
+    ]
+});
 
 // =========================================================================
-// 4. MAP INITIALIZATION (Layers are now defined)
+// 4. MAP INITIALIZATION 
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, districtLayer, roadLayer, roadVectorLayer, highlightLayer, chainageLayer],
+    layers: [baseGroup, districtLayer, highlightLayer, sabahRoadGroup],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
-        zoom: 8
+        zoom: 8,
+        maxZoom: 22
     })
 });
 
-// CRITICAL: Zoom level management for WMS vs Vector roads
-map.getView().on('change:resolution', function () {
-    const zoom = map.getView().getZoom();
-    if (zoom >= 10) {
-        roadVectorLayer.setVisible(true);
-        roadLayer.setVisible(false);
-    } else {
-        roadVectorLayer.setVisible(false);
-        roadLayer.setVisible(true);
-    }
-});
-
-
 // =========================================================================
-// 5. BASEMAP SWITCH LOGIC (Now safely uses districtLayer)
+// 5. BASEMAP SWITCH LOGIC
 // =========================================================================
 let isSatellite = true;
 const basemapButton = document.getElementById('switchBasemap');
 
 basemapButton.addEventListener('click', function () {
     if (isSatellite) {
-        // switch to regular map
         satelliteLayer.setVisible(false);
         regularLayer.setVisible(true);
-        districtLayer.setStyle(osmDistrictStyle); // Update base style
         basemapButton.title = "Switch to Satellite Imagery";
     } else {
-        // switch back to satellite
         regularLayer.setVisible(false);
         satelliteLayer.setVisible(true);
-        districtLayer.setStyle(satelliteDistrictStyle); // Update base style
         basemapButton.title = "Switch to Regular Map";
     }
     isSatellite = !isSatellite;
-    // CRITICAL: Force the district layer to re-evaluate the highlighting fill
+    
+    districtLayer.setStyle(districtFilterStyle); 
     districtLayer.changed();
 });
+// =========================================================================
+// WFS HELPER FUNCTION (Targeted query only)
+// =========================================================================
+/**
+ * Executes a targeted WFS query to GeoServer based on a filter.
+ * @param {string} cqlFilter - The CQL filter string.
+ * @returns {Promise<ol.Feature[]>} A promise that resolves with an array of OpenLayers features.
+ */
+function queryWFS(cqlFilter) {
+    // We are requesting the geometry and attributes for filtering/highlighting
+    const url = (
+        'http://10.1.4.18:8080/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_centerline&' + // ✅ CORRECTED: Targets Road Attribute Layer
+        'outputFormat=application/json&srsName=EPSG:4326&' +
+        'cql_filter=' + encodeURIComponent(cqlFilter)+
+        '&_=' + Date.now()
+    );
+
+    return fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`WFS request failed with status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const format = new ol.format.GeoJSON();
+            return format.readFeatures(data);
+        })
+        .catch(error => {
+            console.error("Error fetching WFS data:", error);
+            return [];
+        });
+}
 
 
 // =========================================================================
-// 6. ROAD SEARCH & AUTOSUGGEST LOGIC (WFS/Vector Query)
+// 6. ROAD SEARCH & AUTOSUGGEST LOGIC (WFS-on-Demand Re-enabled)
 // ========================================================================
 
 //search field selector logic
@@ -355,27 +297,36 @@ function filterBy(fieldName) {
 
 const roadSearchInput = document.getElementById("roadSearch");
 const autocompleteList = document.getElementById("autocomplete-list");
+roadSearchInput.disabled = false; // Re-enabled
 
-// This function will asynchronously fetch road names based on the current search text
-function fetchRoadNames(searchText) {
-    // CRITICAL: Use the roadVectorLayer for searching
-    const allFeatures = roadVectorLayer.getSource().getFeatures();
+// This function now uses WFS to search the GeoServer
+async function fetchRoadNames(searchText) {
+    autocompleteList.innerHTML = "Searching GeoServer...";
+    
+    // 1. Build the CQL Filter for GeoServer
+    // Use ILIKE for case-insensitive partial matching
+    let cql = `${currentSearchField} ILIKE '%${searchText}%'`;
+    
+    // Add district filter if applicable
+    if (currentDistrict !== "ALL") {
+        cql += ` AND district_code = '${currentDistrict}'`;
+    }
+    
+    // Add road type filter if applicable (optional, but good for narrowing results)
+    if (activeRoadTypes.size > 0 && activeRoadTypes.size < Object.keys(roadColors).length) {
+        const types = Array.from(activeRoadTypes).map(type => `'${type}'`).join(',');
+        cql += ` AND "layer" IN (${types})`;
+    }
 
-    // Filter roads that match BOTH the search text AND the selected district
+    // 2. Query GeoServer to get filtered features
+    const features = await queryWFS(cql);
+    lastSearchResults = features; // Store for zooming later
+    
+    // 3. Extract unique road names/IDs from the results
     const results = [...new Set(
-        allFeatures
-        .filter(f => {
-            const fieldValue = (f.get(currentSearchField) || '').toLowerCase();
-            const districtCode = f.get('district_code');
-            const roadType = f.get('layer'); // Check road type filter as well
-
-            const matchesText = fieldValue.includes(searchText.toLowerCase());
-            const matchesDistrict = currentDistrict === "ALL" || districtCode === currentDistrict;
-            const matchesType = activeRoadTypes.has(roadType);
-
-            return matchesText && matchesDistrict && matchesType;
-        })
+        features
         .map(f => f.get(currentSearchField))
+        .filter(Boolean) 
     )];
 
     renderAutocomplete(results, currentSearchField);
@@ -384,26 +335,28 @@ function fetchRoadNames(searchText) {
 function renderAutocomplete(results, fieldName) {
     autocompleteList.innerHTML = "";
 
-    results.forEach(value => { // value is the ID or name
+    results.forEach(value => { 
         const item = document.createElement("div");
-        item.textContent = value; // Display the value (ID or Name)
+        item.textContent = value; 
 
         item.addEventListener("click", function () {
             roadSearchInput.value = value;
             autocompleteList.innerHTML = "";
 
-            // CRITICAL: Pass BOTH the value AND the field name to zoomToFeature
-            zoomToFeature(value, fieldName);
+            const featureToZoom = lastSearchResults.find(f => f.get(fieldName) === value);
+            zoomToFeature(featureToZoom); 
         });
         autocompleteList.appendChild(item);
     });
 }
+
 // Event listener calls the asynchronous function
 roadSearchInput.addEventListener("input", function () {
     const val = this.value.trim();
     autocompleteList.innerHTML = "";
 
-    if (val.length < 2) return; // Wait until user types at least 2 characters
+    // IMPORTANT: Wait until user types at least 2 characters to prevent large initial requests
+    if (val.length < 2) return; 
 
     fetchRoadNames(val);
 });
@@ -430,43 +383,65 @@ minimizeToolbarBtn.addEventListener("click", function () {
 });
 
 // =========================================================================
-// zoomToRoad FUNCTION (Fetches geometry on demand)
+// zoomToRoad FUNCTION (CRITICAL: FIX APPLIED HERE)
 // =========================================================================
-function zoomToFeature(value, fieldName) {
+function zoomToFeature(feature) {
     highlightLayer.getSource().clear();
-    // CRITICAL: Use the roadVectorLayer for finding features
-    const allFeatures = roadVectorLayer.getSource().getFeatures();
-    const feature = allFeatures.find(f => f.get(fieldName) === value);
 
     if (feature) {
+        // Get color for the road layer
         const originalColor = roadColors[feature.get('layer')] || 'black';
-        const roadClone = feature.clone();
-        roadClone.set('highlight_color', originalColor);
-        roadClone.set('road_name', feature.get('road_name')); // Ensure label is preserved
 
-        highlightLayer.getSource().addFeature(roadClone);
-
-        map.getView().fit(feature.getGeometry().getExtent(), {
-            duration: 1000,
-            padding: [50, 50, 50, 50]
+        // Clone just the geometry (to avoid style conflicts)
+        const roadClone = new ol.Feature({
+            geometry: feature.getGeometry().clone()
         });
 
+        // Copy all non-style properties manually
+        const props = feature.getProperties();
+        Object.keys(props).forEach(key => {
+            if (key !== 'geometry') {
+                roadClone.set(key, props[key]);
+            }
+        });
+
+        // Set a custom property used for highlight styling
+        roadClone.set('highlight', true);
+        roadClone.set('highlight_color', originalColor);
+
+        // Add the cloned feature to the highlight layer
+        highlightLayer.getSource().addFeature(roadClone);
+
+        // Zoom to the extent of the feature
+        const extent = feature.getGeometry().getExtent();
+        const transformedExtent = ol.proj.transformExtent(extent, 'EPSG:4326', map.getView().getProjection());
+        map.getView().fit(transformedExtent, { duration: 1000, maxZoom: 17 });
     } else {
-        console.warn(`Geometry for road '${value}' not found.`);
+        console.warn(`Feature not found for zooming.`);
     }
 }
 
+
+
+
 // Reset button logic
 document.getElementById("resetButton").addEventListener("click", function () {
-    // Clear search input and autocomplete
     roadSearchInput.value = "";
     autocompleteList.innerHTML = "";
-    // Clear highlight layer
     highlightLayer.getSource().clear();
+
+    const districtFilter = document.getElementById("districtFilter");
+    districtFilter.value = "ALL";
+    districtFilter.dispatchEvent(new Event('change'));
+
+    const filterBy = document.getElementById("filterBy");
+    filterBy.value = "";
+    filterBy.dispatchEvent(new Event('change'));
+
 });
 
 // =========================================================================
-// 7. CENTER ON CLICK LOGIC (Using toggle/recenter logic)
+// 7. CENTER ON CLICK LOGIC (WFS-on-Demand for Road Click)
 // =========================================================================
 let centerOnClick = false;
 const centerBtn = document.getElementById('center-button');
@@ -481,35 +456,40 @@ centerBtn.addEventListener('click', function () {
     map.getView().setZoom(8);
 });
 
-map.on('click', function (evt) {
-    if (!centerOnClick) return;
-
-    map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
-        // Only target vector layers that have a geometry extent to zoom to
-        if (layer === districtLayer || layer === roadVectorLayer || layer === highlightLayer) {
-            const geometry = feature.getGeometry();
-            const extent = geometry.getExtent();
-            map.getView().fit(extent, {
-                duration: 1000,
-                padding: [50, 50, 50, 50]
-            });
-            return true;
-        }
-    });
-});
 
 
 // =========================================================================
-// 8. ROAD FILTER (Simplified)
+// 8. ROAD FILTER (WMS cql_filter)
 // =========================================================================
 
 function updateRoadFilter() {
-    // 1. Force OpenLayers to re-evaluate the style function for roadVectorLayer
-    roadVectorLayer.changed();
+    let cqlFilter = [];
 
-    // 2. Clear highlight and autocomplete after filter change
-    highlightLayer.getSource().clear();
-    document.getElementById("autocomplete-list").innerHTML = "";
+    // --- Road Type Filter ---
+    if (activeRoadTypes.size > 0 && activeRoadTypes.size < Object.keys(roadColors).length) {
+        const types = Array.from(activeRoadTypes).map(type => `'${type}'`).join(',');
+        cqlFilter.push(`"layer" IN (${types})`);
+    }
+
+    // --- District Filter ---
+    if (currentDistrict !== "ALL") {
+        cqlFilter.push(`"district_code" = '${currentDistrict}'`);
+    }
+
+    if (activeRoadTypes.size === 0) {
+    // If no road types are active, hide the road layer
+    roadLayer.setVisible(false);
+} else {
+    roadLayer.setVisible(true);
+
+    const finalCql = cqlFilter.length > 0 ? cqlFilter.join(' AND ') : '1=1';
+    roadLayerSource.updateParams({ 'cql_filter': finalCql });
+}
+
+// Clear highlight and search results after filter change
+highlightLayer.getSource().clear();
+document.getElementById("autocomplete-list").innerHTML = "";
+
 }
 
 
@@ -518,26 +498,21 @@ function updateRoadFilter() {
 //=========================================================================
 document.getElementById("districtFilter").addEventListener("change", function (e) {
     const selectedDistrictName = e.target.options[e.target.selectedIndex].text;
-    const selectedDistrictValue = e.target.value; // Assuming the value is the district_code or unique ID
+    const selectedDistrictValue = e.target.value; 
 
-    // Clear highlight layer
     highlightLayer.getSource().clear();
 
-    // 1. Update the global district variable
     currentDistrict = (selectedDistrictName === "ALL DISTRICTS") ? "ALL" : selectedDistrictValue;
 
-    // 2. Trigger updates for both road filtering and district highlighting
-    updateRoadFilter(); // Re-filters the roadVectorLayer based on the new district
-    districtLayer.changed(); // Forces the district layer to re-evaluate districtFilterStyle
+    updateRoadFilter(); 
+    districtLayer.changed(); 
 
-    // 3. Handle "ALL DISTRICTS" view reset
     if (selectedDistrictName === "ALL DISTRICTS") {
         map.getView().setCenter(ol.proj.fromLonLat([117.04304, 5.21470]));
         map.getView().setZoom(8);
         return;
     }
 
-    // 4. Zoom to the selected district (remains based on NAME_2)
     const districtFeatures = districtLayer.getSource().getFeatures();
     const selectedFeature = districtFeatures.find(f =>
         f.get("NAME_2") && f.get("NAME_2").toLowerCase() === selectedDistrictName.toLowerCase()
@@ -559,88 +534,179 @@ document.getElementById("districtFilter").addEventListener("change", function (e
 // 9. LEGEND BUILDER & TOGGLE LOGIC
 // =========================================================================
 const legendDiv = document.getElementById("legend");
-const legendContent = legendDiv.querySelector(".legend-content");
+// const legendContent = legendDiv.querySelector(".legend-content");
+const roadTypeItemsContainer = document.getElementById("roadTypeItemsContainer");
+const toggleRoadTypesBtn = document.getElementById("toggleRoadTypes");
+const toggleChainageBtn = document.getElementById("toggleChainage");
+
+const mcdcChainageData = {
+    type: 'MCDC CHAINAGE',
+    color: 'brown'
+};
+const chainageTyoeItemsContainer = document.getElementById("chainageTypeItemsContainer");
+let mcdcChainageItem;
+
+let areRoadTypesVisible = true;
+let areChainageTypesVisible = false;
+
+activeRoadTypes = new Set(Object.keys(roadColors)); // Start with all types active
+
+if(toggleRoadTypesBtn && roadTypeItemsContainer) {
+    toggleRoadTypesBtn.addEventListener("click", function (e) {
+        e.stopPropagation(); // Prevent triggering other click events
+        areRoadTypesVisible = !areRoadTypesVisible;
+
+        if (areRoadTypesVisible) {
+            roadTypeItemsContainer.style.display = "block";
+            toggleRoadTypesBtn.textContent = "-";
+            toggleRoadTypesBtn.title = "Collapse";
+        } else {
+            //Hide the content
+            roadTypeItemsContainer.style.display = "none";
+            toggleRoadTypesBtn.textContent = "+";
+            toggleRoadTypesBtn.title = "Expand";
+        }
+    });
+}
+
+if(toggleChainageBtn && chainageTypeItemsContainer) {
+    toggleChainageBtn.addEventListener("click", function (e) {
+         e.stopPropagation(); // Prevents issues if the label is clickable
+         areChainageTypesVisible = !areChainageTypesVisible;
+
+        if (areChainageTypesVisible) {
+            chainageTypeItemsContainer.style.display = "block";
+            toggleChainageBtn.textContent = "-";
+            toggleChainageBtn.title = "Collapse";
+        } else {
+            //Hide the content
+            chainageTypeItemsContainer.style.display = "none";
+            toggleChainageBtn.textContent = "+";
+            toggleChainageBtn.title = "Expand";
+        }
+    });
+}
 
 // 9A. Build the legend content (items)
 for (const [layerType, color] of Object.entries(roadColors)) {
-    const item = document.createElement("div");
-    item.className = "legend-item active"; // start active
-    item.dataset.layer = layerType;
+  const item = document.createElement("div");
+  item.className = "legend-item active"; // start active
+  item.dataset.layer = layerType;
 
-    // CRITICAL: Add all main layer types to activeRoadTypes for initial visibility
-    activeRoadTypes.add(layerType);
+  const colorBox = document.createElement("div");
+  colorBox.className = "legend-color";
+  colorBox.style.backgroundColor = color;
 
-    const colorBox = document.createElement("div");
-    colorBox.className = "legend-color";
-    colorBox.style.backgroundColor = color;
+  const label = document.createElement("span");
+  label.textContent = layerType;
 
-    const label = document.createElement("span");
-    label.textContent = layerType;
+  item.appendChild(colorBox);
+  item.appendChild(label);
+  if (roadTypeItemsContainer) { 
+      roadTypeItemsContainer.appendChild(item); 
+  }
 
-    const labelContainer = document.createElement("div");
-    labelContainer.className = "legend-label-container";
-    labelContainer.appendChild(colorBox);
-    labelContainer.appendChild(label);
+  item.addEventListener("click", () => {
+    if(!sabahRoadCheckbox.checked) {
+        return;
+    } // Ignore clicks if master is off
 
-    // Container for sub-legend items (hidden by default)
-    const subLegend = document.createElement("div");
-    subLegend.className = "sub-legend";
-    subLegend.style.display = "none";
 
-    // Handle the expandable MCDC
-    if (layerType === "MCDC") {
-        const expandBtn = document.createElement("button");
-        expandBtn.className = "expand-btn";
-        expandBtn.textContent = "+";
-        labelContainer.insertBefore(expandBtn, label);
-
-        // Create sub-item for Chainage
-        const chainageItem = document.createElement("div");
-        chainageItem.className = "sub-legend-item active";
-        chainageItem.textContent = "Chainage";
-        chainageItem.dataset.layer = "CHAINAGE"; // custom ID
-        
-
-        // When sub-item is clicked, toggle chainageLayer visibility
-        chainageItem.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isActive = chainageItem.classList.toggle("disabled");
-            chainageItem.classList.toggle("active", !isActive);
-            chainageLayer.setVisible(!isActive);
-        });
-
-        subLegend.appendChild(chainageItem);
-
-        // Expand/collapse MCDC section
-        expandBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isVisible = subLegend.style.display === "block";
-            subLegend.style.display = isVisible ? "none" : "block";
-            expandBtn.textContent = isVisible ? "+" : "-";
-        });
+    if (activeRoadTypes.has(layerType)) {
+      activeRoadTypes.delete(layerType);
+      item.classList.remove("active");
+      item.classList.add("disabled");
+    } else {
+      activeRoadTypes.add(layerType);
+      item.classList.add("active");
+      item.classList.remove("disabled");
     }
+    updateRoadFilter();
+  });
+}
 
-    item.appendChild(labelContainer);
-    item.appendChild(subLegend);
-    legendContent.appendChild(item);
+if(chainageTypeItemsContainer) {
+    const data = mcdcChainageData;
+    // Create the main item div
+    const item = document.createElement("div");
+    item.id = "mcdcChainageItem"; // Assign the ID needed for the control logic
+    item.className = "legend-item disabled"; // Start disabled
+    
+    // Create the color box
+    const colorBox = document.createElement("span");
+    colorBox.className = "legend-color";
+    colorBox.style.backgroundColor = data.color;
 
-    // Click main item to toggle road type visibility
-    item.addEventListener("click", () => {
-        if (activeRoadTypes.has(layerType)) {
-            activeRoadTypes.delete(layerType);
-            item.classList.remove("active");
-            item.classList.add("disabled");
+    // Create the label
+    const label = document.createElement("span");
+    label.textContent = data.type;
+
+    item.appendChild(colorBox);
+    item.appendChild(label);
+    
+    chainageTypeItemsContainer.appendChild(item);
+    
+    // Store reference for the control logic below
+    mcdcChainageItem = item;
+}
+
+
+
+const sabahRoadCheckbox = document.getElementById("sabahRoadCheckbox");
+const chainageCheckbox = document.getElementById("chainageCheckbox");
+
+// --- Sabah Roads master control ---
+if (sabahRoadCheckbox) {
+    sabahRoadCheckbox.addEventListener('change', function () {
+        const visible = this.checked;
+
+        const roadTypeItems = document.querySelectorAll("#roadTypeItemsContainer .legend-item");
+
+        // Toggle visibility of the road layer
+        if (roadLayer) roadLayer.setVisible(visible);
+
+
+        // Update activeRoadTypes for filter logic
+        if (visible) {
+            activeRoadTypes = new Set(Object.keys(roadColors)); // enable all again
+            // Ensure visual state matches
+           roadTypeItems.forEach(item => {
+                item.classList.add("active");
+                item.classList.remove("disabled"); 
+            });
         } else {
-            activeRoadTypes.add(layerType);
-            item.classList.add("active");
-            item.classList.remove("disabled");
+            activeRoadTypes.clear(); // disable all
+            roadTypeItems.forEach(item => {
+                item.classList.remove("active"); 
+                item.classList.add("disabled"); 
+            });
         }
+
         updateRoadFilter();
     });
 }
 
-// ** CRITICAL INIT CALL **
-updateRoadFilter(); // Ensure initial road vector layer filtering is applied
+// --- Chainage control ---
+if (chainageCheckbox) {
+  chainageCheckbox.addEventListener('change', function () {
+        const visible = this.checked;
+        
+        // 1. Toggle WMS Layer visibility
+        if (chainageLayer) chainageLayer.setVisible(visible);
+
+        // 2. Toggle the visual disabled/active state of the nested label
+        // Check if the dynamic item was successfully created
+        if (mcdcChainageItem) { 
+            if (visible) {
+                mcdcChainageItem.classList.add("active");
+                mcdcChainageItem.classList.remove("disabled");
+            } else {
+                mcdcChainageItem.classList.remove("active");
+                mcdcChainageItem.classList.add("disabled");
+            }
+        }
+    });
+}
 
 
 // 9B. Legend toggle logic
@@ -669,6 +735,12 @@ map.on('pointermove', function (evt) {
     const lat = coord[1].toFixed(5);
 
     document.getElementById('coords').innerHTML = `Lat: ${lat}, Lng: ${lon}`;
+
+      const hit = map.hasFeatureAtPixel(evt.pixel, {
+    layerFilter: function(layer) { return layer === simplifiedLayer; }
+  });
+ map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+
 });
 
 // At the absolute bottom of rmis.js

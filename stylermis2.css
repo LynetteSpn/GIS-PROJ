@@ -77,3 +77,43 @@
 div .sub-legend{
   top: 40px;
 }
+
+/* General style for all OpenLayers tooltips */
+.ol-tooltip {
+    position: relative;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    color: white;
+    padding: 4px 8px;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-size: 12px;
+    cursor: default;
+    user-select: none;
+}
+
+/* Style for the tooltip while actively drawing (in-progress) */
+.ol-tooltip-measure:before {
+    content: "";
+    position: absolute;
+    bottom: -6px; /* Position the caret below the text */
+    left: 50%;
+    margin-left: -7px;
+    border-top: 7px solid rgba(0, 0, 0, 0.5);
+    border-right: 7px solid transparent;
+    border-left: 7px solid transparent;
+}
+
+/* Style for the finalized measurement tooltip */
+.ol-tooltip-static {
+    background-color: #ffcc33; /* Matches your line color */
+    color: black;
+    border: 1px solid white;
+    font-weight: bold;
+    /* Remove the default caret style */
+}
+
+/* Override caret color for the static tooltip */
+.ol-tooltip-static:before {
+    border-top-color: #ffcc33;
+}
