@@ -95,7 +95,6 @@ function highlightRoadStyle(feature) {
     const roadName = feature.get('road_name') || '';
 
     return [
-        new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255, 255, 0, 0.8)', width: 8 }) }),
         new ol.style.Style({
             stroke: new ol.style.Stroke({ color: color, width: 3 }),
             text: new ol.style.Text({
@@ -106,7 +105,8 @@ function highlightRoadStyle(feature) {
                 overflow: true,
                 placement: 'line'
             })
-        })
+        }),
+        new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255, 255, 0, 0.8)', width: 8 }) })
     ];
 }
 
@@ -129,7 +129,7 @@ function districtFilterStyle(feature) {
 
 // WMS ROAD LAYER (FAST VISUALIZATION - Now handles display at all zoom levels)
 const roadLayerSource = new ol.source.TileWMS({
-    url: 'http://10.1.4.18:8080/geoserver/rmisv2db_prod/wms',
+    url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
     params: {
         'LAYERS': 'rmisv2db_prod:gis_sabah_road_map',
         'STYLES': 'road_style',
@@ -151,7 +151,7 @@ roadLayer.set('name', 'RoadLayer');
 // CHAINAGE LAYER (WMS, controlled by legend)
 const chainageLayer = new ol.layer.Tile({
     source: new ol.source.TileWMS({
-        url: 'http://10.1.4.18:8080/geoserver/chainage_bft/wms',
+        url: 'https://10.1.4.18/geoserver/chainage_bft/wms',
         params: {
             'LAYERS': 'chainage_bft:gis_chainage_kku_202510280845', 
             'TILED': true
@@ -185,7 +185,7 @@ const simplifiedSource = new ol.source.Vector({
     url: function (extent,resolution,projection) {
         const srs = projection.getCode();
         const bbox = extent.join(',');
-        return `http://10.1.4.18:8080/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:output&outputFormat=application/json&srsName=${srs}&bbox=${bbox},${srs}&maxFeatures=200`;
+        return `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:output&outputFormat=application/json&srsName=${srs}&bbox=${bbox},${srs}&maxFeatures=200`;
     },
     strategy: ol.loadingstrategy.bbox
 });
@@ -216,7 +216,7 @@ const sabahRoadGroup = new ol.layer.Group({
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, districtLayer, highlightLayer, sabahRoadGroup],
+    layers: [baseGroup, sabahRoadGroup, districtLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -254,10 +254,20 @@ basemapButton.addEventListener('click', function () {
  * @returns {Promise<ol.Feature[]>} A promise that resolves with an array of OpenLayers features.
  */
 function queryWFS(cqlFilter) {
+    let finalCql = cqlFilter;
+
+    if(activeRoadTypes.size > 0 && activeRoadTypes.size < Object.keys(roadColors).length) {
+        const types = Array.from(activeRoadTypes).map(type => `'${type}'`).join(',');
+        const typeFilter = `"layer" IN (${types})`;
+        finalCql = `(${cqlFilter}) AND (${typeFilter})`;
+    }else if(activeRoadTypes.size === 0) {
+        finalCql = "1=0"; // No types active, return no results
+    }
+
     // We are requesting the geometry and attributes for filtering/highlighting
     const url = (
-        'http://10.1.4.18:8080/geoserver/rmisv2db_prod/ows?service=WFS&' +
-        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_centerline&' + // ✅ CORRECTED: Targets Road Attribute Layer
+        'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_centerline&' + 
         'outputFormat=application/json&srsName=EPSG:4326&' +
         'cql_filter=' + encodeURIComponent(cqlFilter)+
         '&_=' + Date.now()
@@ -279,6 +289,59 @@ function queryWFS(cqlFilter) {
             return [];
         });
 }
+
+async function getChainageRange(roadId) {
+    // Layer name confirmed from your chainage WMS layer:
+    const chainageTypeName = 'chainage_bft:gis_chainage_kku_202510280845'; 
+
+    // Filter by the unique road ID field ('pkm_road_id')
+    const cql = `"pkm_road_id"='${roadId}'`; 
+
+    // Build the WFS request URL
+    const url = (
+        'https://10.1.4.18/geoserver/chainage_bft/ows?service=WFS&' + 
+        'version=1.0.0&request=GetFeature&typeName=' + chainageTypeName + '&' +
+        'outputFormat=application/json&srsName=EPSG:4326&' +
+        'cql_filter=' + encodeURIComponent(cql) +
+        '&propertyname=distance' + // Request ONLY the distance field
+        '&maxFeatures=10000&sortBy=distance&_=' + Date.now()
+    );
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Chainage WFS failed');
+        
+        const data = await response.json();
+        // Use GeoJSON format reader to parse features
+        const features = new ol.format.GeoJSON().readFeatures(data);
+        
+        if (features && features.length > 0) {
+            let minChainage = Infinity;
+            let maxChainage = -Infinity;
+            
+            features.forEach(f => {
+                // Read the 'distance' property
+                const val = parseFloat(f.get('distance')); 
+                if (!isNaN(val)) {
+                    if (val < minChainage) minChainage = val;
+                    if (val > maxChainage) maxChainage = val;
+                }
+            });
+
+            return {
+                start: minChainage !== Infinity ? minChainage : null,
+                end: maxChainage !== -Infinity ? maxChainage : null
+            };
+        }
+        return { start: null, end: null };
+        
+    } catch (error) {
+        console.error("Error fetching chainage distance data:", error);
+        return { start: null, end: null };
+    }
+}
+
+
 
 
 // =========================================================================
@@ -383,42 +446,33 @@ minimizeToolbarBtn.addEventListener("click", function () {
 });
 
 // =========================================================================
-// zoomToRoad FUNCTION (CRITICAL: FIX APPLIED HERE)
+// zoomToFeature FUNCTION (FINAL FIX: Clean Cloning and Direct Extent)
 // =========================================================================
 function zoomToFeature(feature) {
-    highlightLayer.getSource().clear();
+ highlightLayer.getSource().clear(); // Clear previous highlights
 
-    if (feature) {
-        // Get color for the road layer
-        const originalColor = roadColors[feature.get('layer')] || 'black';
+ if (feature && feature.getGeometry()) {
+ 
+ // 1. Clone the feature to keep all properties (layer, road_name)
+        const roadClone = feature.clone();
+        
+        // 2. CRITICAL: Transform geometry from WFS (EPSG:4326) to Map View (EPSG:3857)
+        roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
+        
+        // 3. Add the transformed feature to the highlight layer source.
+ highlightLayer.getSource().addFeature(roadClone);
 
-        // Clone just the geometry (to avoid style conflicts)
-        const roadClone = new ol.Feature({
-            geometry: feature.getGeometry().clone()
+ // 4. Zoom to the extent of the *transformed* feature.
+ const extent = roadClone.getGeometry().getExtent();
+
+ map.getView().fit(extent, { 
+            duration: 1000, 
+            maxZoom: 17,
+            padding: [50, 50, 50, 50]
         });
-
-        // Copy all non-style properties manually
-        const props = feature.getProperties();
-        Object.keys(props).forEach(key => {
-            if (key !== 'geometry') {
-                roadClone.set(key, props[key]);
-            }
-        });
-
-        // Set a custom property used for highlight styling
-        roadClone.set('highlight', true);
-        roadClone.set('highlight_color', originalColor);
-
-        // Add the cloned feature to the highlight layer
-        highlightLayer.getSource().addFeature(roadClone);
-
-        // Zoom to the extent of the feature
-        const extent = feature.getGeometry().getExtent();
-        const transformedExtent = ol.proj.transformExtent(extent, 'EPSG:4326', map.getView().getProjection());
-        map.getView().fit(transformedExtent, { duration: 1000, maxZoom: 17 });
-    } else {
-        console.warn(`Feature not found for zooming.`);
-    }
+ } else {
+ console.warn(`Feature not found or geometry missing for zooming.`);
+ }
 }
 
 

@@ -1,4 +1,30 @@
 // =========================================================================
+//  SHARE LOCATION FUNCTION & OVERLAY
+// =========================================================================
+
+// New overlay for the share info popup
+let sharePopup = new ol.Overlay({ 
+    // We create the element dynamically later, but here we just need a placeholder div
+    element: document.createElement('div'), 
+    positioning: 'bottom-center',
+    offset: [0, -15] // Position it just above the location marker
+});
+map.addOverlay(sharePopup); // Add the overlay to the map
+
+function copyCoordsToClipboard(lat, lon) {
+    const textToCopy = `Lat: ${lat}, Lng: ${lon}`;
+    
+    // Use the modern clipboard API
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        // Simple alert for confirmation
+        alert(`Copied coordinates to clipboard: ${textToCopy}`);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy coordinates. Please check browser permissions.');
+    });
+}
+
+// =========================================================================
 // 11. SIDEBAR MINIMIZE/EXPAND
 // =========================================================================
 const sidebar = document.getElementById('side-toolbar');
@@ -43,36 +69,131 @@ function showRoadInfo(feature, coordinate) {
         return;
     }
 
-    const allowedKeys = ['road_name', 'pkm_road_id', 'marris_id', 'district_code', 'layer', 'road_length']; 
+    const allowedKeys = ['road_name', 'pkm_road_id', 'marris_id', 'district_code', 'layer', 'road_length','start_node_coord','end_node_coord']; 
+    let copyText = '';
     let html = '<b>Road Information</b><hr>';
+    let roadNameForCopy = '';
 
     allowedKeys.forEach(key => {
         // Check if the property is defined AND not null/empty
         const rawValue = props[key];
         let value;
         
-        if (rawValue !== null && rawValue !== undefined && rawValue !== '') {
-            value = rawValue;
+        const isCoordKey = key === 'start_node_coord' || key === 'end_node_coord';
+
+        if (rawValue !== null && rawValue !== undefined && rawValue !== ''|| isCoordKey ) {
+      
+
+            if (isCoordKey && (rawValue === null || rawValue === undefined)) {
+                value = "N/A";
+            } else {
+                value = rawValue;
+            }
             
             // Apply special formatting if needed
             if (key === 'layer' && value === 'UNID') {
                 value = 'Unregistered Road';
             }
             
-            const displayKey = key.replace('_', ' ').toUpperCase();
+            let displayKey = key.replace('_', ' ').toUpperCase();
+
+            if (key === 'start_node_coord') {
+                displayKey = 'START CHAINAGE (LAT, LON)';
+            } else if (key === 'end_node_coord') {
+                displayKey = 'END CHAINAGE (LAT, LON)';
+            }
+
+            if (key === 'road_name') {
+                roadNameForCopy = value;
+
+                html += `<b>${displayKey}:</b> ` +
+                        `<span id="roadNameClickable" ` + // Added ID for easier targeting
+                        `onclick="copyRoadNameOnly(this, '${roadNameForCopy.replace(/'/g, "\\'")}')" ` +
+                        `onmouseover="styleRoadName(this)" ` + // New hover handler
+                        `onmouseout="unstyleRoadName(this)" ` +  // New unhover handler
+                        `style="cursor: pointer;" ` + // Keep cursor pointer style
+                        `title="Copy road name">${value}</span><br>`;
+            } else {
             html += `<b>${displayKey}:</b> ${value}<br>`;
+            }
+            copyText += `${displayKey}: ${value}\n`;
         }
-        // } else {
-        //     // Display 'N/A' or 'MISSING' for missing data
-        //     const displayKey = key.replace('_', ' ').toUpperCase();
-        //     html += `<b>${displayKey}:</b> <span style="color: red;">N/A</span><br>`;
-        // }
     });
 
+    if(copyText.length > 0){
+         html += '<hr><a href="#" onclick="copyRoadInfoToClipboard(this); return false;" ' +
+            'style="color: blue; cursor: pointer; text-decoration: underline; font-size: 0.9em;">Copy Road Info</a>';
+    }else {
+        html += '<hr>No detailed attribute data found for this road.';
+    }
+
+   
+    popupContent.dataset.copyText = copyText;
+    
     popupContent.innerHTML = html;
     popup.setPosition(coordinate);
     popupElement.style.display = 'block';
     lockedPopup = true; 
+}
+
+function styleRoadName(spanElement) {
+    spanElement.style.color = 'blue';
+    spanElement.style.textDecoration = 'underline';
+}
+function unstyleRoadName(spanElement) {
+    spanElement.style.color = '';
+    spanElement.style.textDecoration = '';
+}
+
+function copyRoadInfoToClipboard(linkElement) { // Changed parameter name to linkElement
+    const textToCopy = popupContent.dataset.copyText;
+    
+    if (!textToCopy) {
+        alert('No road information to copy.');
+        return;
+    }
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        // Provide visual feedback for a link
+        const originalText = linkElement.textContent;
+        const originalColor = linkElement.style.color;
+
+        linkElement.textContent = 'Copied';
+
+        // Reset the link after a short delay
+        setTimeout(() => {
+            linkElement.textContent = originalText;
+            linkElement.style.color = originalColor; // Revert to original color (blue)
+            linkElement.style.textDecoration = 'underline'; // Restore underline
+        }, 1500);
+        
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy road information. Please check browser permissions.');
+    });
+}
+
+function copyRoadNameOnly(spanElement, roadName) {
+    if (!roadName) {
+        alert('No road name to copy.');
+        return;
+    }
+
+    navigator.clipboard.writeText(roadName).then(() => {
+        const originalText = spanElement.textContent;
+        const originalColor = spanElement.style.color;
+
+        // Reset the element after a short delay
+        setTimeout(() => {
+            spanElement.textContent = originalText;
+            spanElement.style.color = originalColor;
+            spanElement.style.textDecoration = 'underline';
+        }, 1500);
+        
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy road name. Please check browser permissions.');
+    });
 }
 
 function hideRoadInfo() {
@@ -86,15 +207,18 @@ popupCloser.onclick = function (evt) {
     hideRoadInfo();
 };
 
-// --- Click popup (WFS-on-Demand) ---
-map.on('singleclick', async function (evt) {
-    // If we click again, unlock the previous one before checking for a new feature
+// --- Control Variable (Defined here, accessible globally) ---
+let roadInfoListener = null; 
+
+
+// --- Function to handle the actual road info logic (MOVED from inside map.on) ---
+async function handleRoadInfoClick(evt) {
+    // Use the global 'lockedPopup' variable defined above this section.
     if (lockedPopup) {
         hideRoadInfo(); 
-        // We return here to prevent double WFS call on rapid clicking
-        // If the user clicks again, the function will run again without this return.
-        // For simplicity, we process the new click immediately below:
     }
+
+    highlightLayer.getSource().clear();
 
     // 1. Check for District or Highlight clicks first (local features)
     let localFeature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
@@ -109,9 +233,6 @@ map.on('singleclick', async function (evt) {
 
     // 2. WFS-on-Demand: If no local feature, query GeoServer for a road feature at the click point
     const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
-   // const bufferdistance = 30; // in meters
-    // CRITICAL FIX: Unit changed to 'meters' and distance adjusted to avoid GeoServer CQL error.
-
     const bufferDegrees = 0.00027; 
     const minLon = lon - bufferDegrees;
     const minLat = lat - bufferDegrees;
@@ -122,26 +243,82 @@ map.on('singleclick', async function (evt) {
 
     const features = await queryWFS(cql);
 
-    highlightLayer.getSource().clear(); 
+    const activeFeatures = features.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
 
-    if (features && features.length > 0) {
-        const feature = features[0];
-        
-        // Show the popup using the newly fetched WFS feature
-        showRoadInfo(feature, evt.coordinate);
-        
-        // Highlight the feature
-        const originalColor = roadColors[feature.get('layer')] || 'black';
-        const roadClone = feature.clone();
-        roadClone.set('highlight_color', originalColor);
-        roadClone.set('road_name', feature.get('road_name')); 
+    if (activeFeatures && activeFeatures.length > 0) {
+    const feature = activeFeatures[0];
 
-        highlightLayer.getSource().addFeature(roadClone);
+    const geometry = feature.getGeometry();
 
-    } else {
-        hideRoadInfo();
+    let startDisplay = 'N/A';
+    let endDisplay = 'N/A';
+
+    if(geometry && geometry.getType() === 'LineString') {
+
+            // 1. CLONE the geometry to avoid modifying the original feature's geometry
+            const geometryClone = geometry.clone(); 
+            
+            // 2. EXPLICITLY transform the cloned geometry to EPSG:4326
+            // The original geometry is assumed to be in the map's view projection (e.g., 3857) 
+            // after the WFS reader parsed it, so we transform it back to 4326.
+            geometryClone.transform(map.getView().getProjection(), 'EPSG:4326');
+            
+ const coords = geometryClone.getCoordinates();
+
+            // Use a stronger check for the coords array
+ if(Array.isArray(coords) && coords.length >= 2) {
+ const startCoord = coords[0];
+ const endCoord = coords[coords.length - 1];
+
+                // Since we explicitly transformed to 4326, the format is [LON, LAT]
+ startDisplay = `${startCoord[1].toFixed(6)} ${startCoord[0].toFixed(6)}`; // LAT, LON
+ endDisplay = `${endCoord[1].toFixed(6)} ${endCoord[0].toFixed(6)}`; // LAT, LON
+
+ } else if (Array.isArray(coords) && coords.length === 1) {
+                // Handle the rare case where the LineString is only a single point
+                const singleCoord = coords[0];
+                startDisplay = `${singleCoord[1].toFixed(6)} ${singleCoord[0].toFixed(6)}`;
+                endDisplay = 'N/A (Single Point)';
+            }
+ }
+
+ feature.set('start_node_coord', startDisplay);
+ feature.set('end_node_coord', endDisplay);
+
+  // Show the popup using the newly fetched WFS feature
+ showRoadInfo(feature, evt.coordinate);
+
+ // Highlight the feature
+const roadClone = feature.clone();
+ // The geometry for HIGHLIGHTING must remain transformed to the map's projection (3857)
+ roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
+ highlightLayer.getSource().addFeature(roadClone);
+
+ } else {
+hideRoadInfo();
+ }
+}
+
+
+// --- Control Functions to manage activation ---
+
+function disableRoadInfoClick() {
+    if (roadInfoListener) {
+        ol.Observable.unByKey(roadInfoListener);
+        roadInfoListener = null; 
     }
-});
+}
+
+function enableRoadInfoClick() {
+    if (!roadInfoListener) {
+        // Re-attach the click listener, linking it to the handler function
+        roadInfoListener = map.on('singleclick', handleRoadInfoClick);
+    }
+}
+
+// **Initial Setup**: Start the listener active by default
+enableRoadInfoClick();
+
 
 
 // =========================================================================
@@ -161,6 +338,7 @@ locateBtn.addEventListener('click', () => {
         if ('geolocation' in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
+                    const accuracy = pos.coords.accuracy;
                     const coords = [pos.coords.longitude, pos.coords.latitude];
                     const transformed = ol.proj.fromLonLat(coords);
 
@@ -168,13 +346,23 @@ locateBtn.addEventListener('click', () => {
                         map.removeLayer(locationLayer);
                     }
 
+                    const accuracyCircle = new ol.Feature({
+                        geometry: new ol.geom.Circle(transformed, accuracy),
+                    });
+
+                    const accuracyStyle = new ol.style.Style({
+                        fill: new ol.style.Fill({ color: 'rgba(0, 150, 255, 0.2)' }),
+                        stroke: new ol.style.Stroke({ color: 'rgba(0, 150, 255, 0.8)', width: 1 }),
+                    });
+                    accuracyCircle.setStyle(accuracyStyle);
+
                     const marker = new ol.Feature({
                         geometry: new ol.geom.Point(transformed),
                     });
 
                     const markerStyle = new ol.style.Style({
                         image: new ol.style.Circle({
-                            radius: 6,
+                            radius: 3,
                             fill: new ol.style.Fill({ color: 'rgba(0, 150, 255, 0.9)' }),
                             stroke: new ol.style.Stroke({ color: '#fff', width: 2.5 }),
                         }),
@@ -183,14 +371,49 @@ locateBtn.addEventListener('click', () => {
 
                     locationLayer = new ol.layer.Vector({
                         source: new ol.source.Vector({
-                            features: [marker],
+                            features: [accuracyCircle, marker],
                         }),
                     });
                     map.addLayer(locationLayer);
 
+                    // --- 3. Share Popup Overlay ---
+                    const lon = coords[0].toFixed(6);
+                    const lat = coords[1].toFixed(6);
+                    const shareText = `Lat: ${lat}, Lng: ${lon} (±${accuracy.toFixed(1)}m)`;
+                    
+                        const popupElement = sharePopup.getElement();
+
+                            // --- UPDATED HTML FOR SHARING ---
+                            const shareLink = `
+            <a href="https://wa.me/?text=${encodeURIComponent(shareText)}" 
+            target="_blank" 
+            class="share-popup-link whatsapp-link"
+            title="Share location via WhatsApp">
+            <i class="fab fa-whatsapp"></i> WhatsApp
+            </a>`;
+
+        const copyLink = `<a href="#" onclick="copyCoordsToClipboard('${lat}', '${lon}'); return false;" 
+                        class="share-popup-link copy-link"
+                        title="Copy Lat/Lon coordinates">
+                        <i class="fas fa-copy"></i> Copy Coords
+                        </a>`;
+
+
+        popupElement.innerHTML = `
+            <div class="share-popup-box">
+                <span class="share-popup-text">${shareText}</span>
+                <div class="share-popup-actions">
+                    ${shareLink}
+                    ${copyLink}
+                </div>
+            </div>`;
+
+        sharePopup.setPosition(transformed);
+        popupElement.style.display = 'block';
+
                     map.getView().animate({
                         center: transformed,
-                        zoom: 16,
+                        zoom: 13,
                         duration: 1000,
                     });
                 },
@@ -223,9 +446,11 @@ locateBtn.addEventListener('click', () => {
             alert('Geolocation not supported on this device.');
             locateBtn.classList.remove('active');
             locateActive = false;
+            sharePopup.getElement().style.display = 'none'; // Hide popup if geolocation not supported
         }
     } else {
         locateBtn.classList.remove('active');
+        sharePopup.getElement().style.display = 'none'; // Hide popup
         if (locationLayer) {
             map.removeLayer(locationLayer);
             locationLayer = null;

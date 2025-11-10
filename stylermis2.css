@@ -81,9 +81,9 @@ div .sub-legend{
 /* General style for all OpenLayers tooltips */
 .ol-tooltip {
     position: relative;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(251, 255, 28, 0.877);
     border-radius: 4px;
-    color: white;
+    color: rgb(0, 0, 0);
     padding: 4px 8px;
     opacity: 0.8;
     white-space: nowrap;
@@ -99,7 +99,7 @@ div .sub-legend{
     bottom: -6px; /* Position the caret below the text */
     left: 50%;
     margin-left: -7px;
-    border-top: 7px solid rgba(0, 0, 0, 0.5);
+    border-top: 7px solid rgba(252, 255, 56, 0.938);
     border-right: 7px solid transparent;
     border-left: 7px solid transparent;
 }
@@ -116,4 +116,71 @@ div .sub-legend{
 /* Override caret color for the static tooltip */
 .ol-tooltip-static:before {
     border-top-color: #ffcc33;
+}
+
+/* --- POPUP STYLING FOR LOCATE ME BUTTON --- */
+
+/* Container for the share popup */
+.share-popup-box {
+    background-color: #ffffff; /* Clean white background */
+    border: none;
+    border-radius: 8px; /* Soft rounded corners */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); /* Lifted appearance */
+    padding: 12px;
+    max-width: 250px;
+    text-align: center;
+    font-family: Arial, sans-serif;
+    min-width: 200px;
+}
+
+/* Text display for the coordinates and accuracy */
+.share-popup-text {
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+/* Container for the action buttons/links */
+.share-popup-actions {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-top: 5px;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+}
+
+/* General style for the links/buttons */
+.share-popup-link {
+    text-decoration: none;
+    font-size: 0.8em;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    display: flex; /* Align icon and text */
+    align-items: center;
+}
+
+/* WhatsApp specific styling */
+.whatsapp-link {
+    color: #25D366; /* WhatsApp green */
+}
+
+/* Copy button specific styling */
+.copy-link {
+    color: #007bff; /* Standard blue */
+}
+
+/* Hover effect */
+.share-popup-link:hover {
+    background-color: #f0f0f0;
+}
+
+/* Styling for the icons within the links */
+.share-popup-link i {
+    margin-right: 5px;
 }
