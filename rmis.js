@@ -25,6 +25,18 @@ const satelliteLayer = new ol.layer.Tile({
   })
 });
 
+const labelsLayer = new ol.layer.Tile({
+  source: new ol.source.XYZ({
+    // 'h' is for Hybrid (roads, labels, boundaries)
+    url: 'https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', 
+    attributions: '© Google',
+    // Set layer as transparent so it shows the satellite layer beneath it
+    cacheSize: 0 
+  }),
+  // Set opacity high (e.g., 0.99) to make sure it renders on top
+  opacity: 0.99 
+});
+
 satelliteLayer.getSource().on('tileloaderror', () => {
   console.warn("Google tile failed; switching to ESRI backup.");
   satelliteLayer.setSource(new ol.source.XYZ({
@@ -34,10 +46,11 @@ satelliteLayer.getSource().on('tileloaderror', () => {
 
 
 const baseGroup = new ol.layer.Group({
-    layers: [satelliteLayer, regularLayer]
+    layers: [satelliteLayer,labelsLayer, regularLayer]
 });
 
 satelliteLayer.setVisible(true);
+regularLayer.setVisible(false);
 regularLayer.setVisible(false);
 
 
@@ -49,12 +62,12 @@ regularLayer.setVisible(false);
 function osmDistrictStyle(feature) {
     const name = feature.get('NAME_2');
     const style = new ol.style.Style({
-        stroke: new ol.style.Stroke({ color: 'black', width: 1 }),
+        stroke: new ol.style.Stroke({ color: 'transparent', width: 1 }),
         text: new ol.style.Text({
             text: name || "",
             font: '14px Calibri,sans-serif',
-            fill: new ol.style.Fill({ color: '#000' }),
-            stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+            fill: new ol.style.Fill({ color: 'transparent' }),
+            stroke: new ol.style.Stroke({ color: '#000000ff', width: 0.5 }),
             overflow: false
         })
     });
@@ -227,24 +240,50 @@ const map = new ol.Map({
 // =========================================================================
 // 5. BASEMAP SWITCH LOGIC
 // =========================================================================
-let isSatellite = true;
+// Use a string to track the current mode
+let currentBasemap = 'SATELLITE'; // SATELLITE, HYBRID, REGULAR
 const basemapButton = document.getElementById('switchBasemap');
 
-basemapButton.addEventListener('click', function () {
-    if (isSatellite) {
-        satelliteLayer.setVisible(false);
+// A helper function to manage visibility
+function setBasemap(mode) {
+    if (mode === 'REGULAR') {
         regularLayer.setVisible(true);
+        satelliteLayer.setVisible(false);
+        labelsLayer.setVisible(false);
         basemapButton.title = "Switch to Satellite Imagery";
-    } else {
+    } else if (mode === 'SATELLITE') {
         regularLayer.setVisible(false);
         satelliteLayer.setVisible(true);
+        labelsLayer.setVisible(false); // Satellite only
+        basemapButton.title = "Switch to Hybrid Map";
+    } else if (mode === 'HYBRID') {
+        regularLayer.setVisible(false);
+        satelliteLayer.setVisible(true); // Satellite base
+        labelsLayer.setVisible(true); // Labels on top
         basemapButton.title = "Switch to Regular Map";
     }
-    isSatellite = !isSatellite;
-    
+    currentBasemap = mode;
+
+    // isSatellite variable used in districtFilterStyle. Update it.
+    isSatellite = (mode === 'SATELLITE' || mode === 'HYBRID');
     districtLayer.setStyle(districtFilterStyle); 
     districtLayer.changed();
+}
+
+// Update the click listener for the cycle
+basemapButton.addEventListener('click', function () {
+    if (currentBasemap === 'SATELLITE') {
+        setBasemap('HYBRID');
+    } else if (currentBasemap === 'HYBRID') {
+        setBasemap('REGULAR');
+    } else { // Current is REGULAR or initial state
+        setBasemap('SATELLITE');
+    }
 });
+
+// Ensure initial state is set correctly (required due to the new variable)
+setBasemap(currentBasemap);
+
 // =========================================================================
 // WFS HELPER FUNCTION (Targeted query only)
 // =========================================================================
@@ -267,7 +306,7 @@ function queryWFS(cqlFilter) {
     // We are requesting the geometry and attributes for filtering/highlighting
     const url = (
         'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
-        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_centerline&' + 
+        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_centerline&' + // ✅ CORRECTED: Targets Road Attribute Layer
         'outputFormat=application/json&srsName=EPSG:4326&' +
         'cql_filter=' + encodeURIComponent(cqlFilter)+
         '&_=' + Date.now()
