@@ -95,9 +95,7 @@
                         <strong>Sabah Roads</strong>
                         <button id="toggleRoadTypes" class="collapse-toggle" title="Collapse/Expand"><b>-</b></button>
                     </label>
-                    
-                    <div id="roadTypeItemsContainer" class="layer-list">
-                        </div>
+                    <div id="roadTypeItemsContainer" class="layer-list"></div>
                     
                     <div class="layer-list">
                         <label>
@@ -105,10 +103,27 @@
                             <strong>Chainages</strong>
                             <button id="toggleChainage" class="toggle-group" title="Collapse/Expand"><b>-</b></button>
                         </label>
-
-                        <div id="chainageTypeItemsContainer" class="layer-list">
+                        <div id="chainageTypeItemsContainer" class="layer-list"></div>
                     </div>
-                </div>
+
+                    <div class="lmc-road">
+                        <label>
+                            <input type="checkbox" id="lmcCheckbox" class="lmcCheckbox" data-layer="lmcLayer">
+                            <strong>LRM Roads</strong>
+                            <button id="toggleLMC" class="toggle-list" title="Collapse/Expand"><b>-</b></button>
+                        </label>
+                        <div id="lrmItemsContainer" class="layer-list"></div>
+                    </div>
+
+                    <div class="bridges-layer">
+                        <label>
+                            <input type="checkbox" id="BCCheckbox" class="BCCheckbox" data-layer="BCLayer">
+                            <strong>Bridges & Culverts</strong>
+                            <button id="toggleBC" class="toggle-BC" title="Collapse/Expand"><b>-</b></button>
+                        </label>
+                        <div id="BCItemsContainer" class="layer-list"></div>
+                    </div>
+
             </div>
         </div>
 

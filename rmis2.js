@@ -4,10 +4,9 @@
 
 // New overlay for the share info popup
 let sharePopup = new ol.Overlay({ 
-    // We create the element dynamically later, but here we just need a placeholder div
     element: document.createElement('div'), 
     positioning: 'bottom-center',
-    offset: [0, -15] // Position it just above the location marker
+    offset: [0, -15] 
 });
 map.addOverlay(sharePopup); // Add the overlay to the map
 
@@ -64,72 +63,154 @@ let lockedPopup = false;
 function showRoadInfo(feature, coordinate) {
     const props = feature.getProperties();
 
+    // Skip district features
     if (props['NAME_2']) { 
-        // Skip district features
         return;
     }
 
-    const allowedKeys = ['road_name', 'pkm_road_id', 'marris_id', 'district_code', 'layer', 'road_length','start_node_coord','end_node_coord']; 
+    // 1. Prepare Click Coordinates
+    const clickedLonLat = ol.proj.toLonLat(coordinate);
+    const clickedLat = clickedLonLat[1].toFixed(6);
+    const clickedLon = clickedLonLat[0].toFixed(6);
+    
+    // 2. Define Attributes & Content Variables
+    const allowedKeys = [
+        'road_name', 
+        'pkm_road_id', 
+        'marris_id', 
+        'district_code', 
+        'layer', 
+        'road_length', 
+        'start_node_coord', 
+        'end_node_coord'
+    ]; 
+    
     let copyText = '';
-    let html = '<b>Road Information</b><hr>';
+    let tableRows = '';
     let roadNameForCopy = '';
 
+    // 3. Build popup header
+    let html = '<div class="popup-header">Road Information</div>';
+    
+    // 4. Add clicked location section
+    html += `
+        <div class="popup-location-section">
+            <span class="location-label">Clicked:</span>
+            <span class="location-value">${clickedLat}, ${clickedLon}</span>
+        </div>`;
+    
+    copyText += `CLICKED LOCATION\nLat: ${clickedLat}, Lng: ${clickedLon}\n\n`;
+    copyText += `ROAD INFORMATION\n`;
+
+    // 5. Build table rows for road attributes
     allowedKeys.forEach(key => {
-        // Check if the property is defined AND not null/empty
         const rawValue = props[key];
         let value;
         
         const isCoordKey = key === 'start_node_coord' || key === 'end_node_coord';
 
-        if (rawValue !== null && rawValue !== undefined && rawValue !== ''|| isCoordKey ) {
-      
-
+        if (rawValue !== null && rawValue !== undefined && rawValue !== '' || isCoordKey) {
+            
             if (isCoordKey && (rawValue === null || rawValue === undefined)) {
                 value = "N/A";
             } else {
                 value = rawValue;
             }
             
-            // Apply special formatting if needed
-            if (key === 'layer' && value === 'UNID') {
-                value = 'Unregistered Road';
-            }
+            // Get display label and format value
+            let displayKey;
+            let formattedValue = value;
+            let valueClass = '';
             
-            let displayKey = key.replace('_', ' ').toUpperCase();
-
-            if (key === 'start_node_coord') {
-                displayKey = 'START CHAINAGE (LAT, LON)';
-            } else if (key === 'end_node_coord') {
-                displayKey = 'END CHAINAGE (LAT, LON)';
+            switch (key) {
+                case 'road_name': 
+                    displayKey = 'Road Name';
+                    roadNameForCopy = value;
+                    formattedValue = `<span class="road-name-clickable" 
+                        onclick="copyRoadNameOnly(this, '${value.replace(/'/g, "\\'")}')" 
+                        title="Click to copy road name">${value}</span>`;
+                    break;
+                    
+                case 'pkm_road_id': 
+                    displayKey = 'PKM Road ID'; 
+                    break;
+                    
+                case 'marris_id': 
+                    displayKey = 'Marris ID'; 
+                    break;
+                    
+                case 'district_code': 
+                    displayKey = 'District'; 
+                    break;
+                    
+                case 'layer': 
+                    displayKey = 'Road Type';
+                    const typeMap = {
+                        'UNID': { text: 'Unregistered', class: 'unid' },
+                        'FEDERAL': { text: 'Federal', class: 'federal' },
+                        'JKR': { text: 'JKR', class: 'jkr' },
+                        'MCDC': { text: 'MCDC', class: 'mcdc' },
+                        'PLANTATION': { text: 'Plantation', class: 'plantation' },
+                        'JLN KAMPUNG': { text: 'Jln Kampung', class: 'kampung' },
+                        'OTHER': { text: 'Other', class: 'other' }
+                    };
+                    const typeInfo = typeMap[value] || { text: value, class: 'other' };
+                    formattedValue = `<span class="road-type-badge road-type-${typeInfo.class}">${typeInfo.text}</span>`;
+                    break;
+                    
+                case 'road_length': 
+                    displayKey = 'Length';
+                    const lengthKm = (parseFloat(value) / 1000).toFixed(2);
+                    formattedValue = `${parseFloat(value).toFixed(2)} m (${lengthKm} km)`;
+                    break;
+                    
+                case 'start_node_coord': 
+                    displayKey = 'Start Node';
+                    formattedValue = `<span class="coord-value">${value}</span>`;
+                    break;
+                    
+                case 'end_node_coord': 
+                    displayKey = 'End Node';
+                    formattedValue = `<span class="coord-value">${value}</span>`;
+                    break;
+                    
+                default: 
+                    displayKey = key.replace(/_/g, ' ').toUpperCase();
             }
 
-            if (key === 'road_name') {
-                roadNameForCopy = value;
-
-                html += `<b>${displayKey}:</b> ` +
-                        `<span id="roadNameClickable" ` + // Added ID for easier targeting
-                        `onclick="copyRoadNameOnly(this, '${roadNameForCopy.replace(/'/g, "\\'")}')" ` +
-                        `onmouseover="styleRoadName(this)" ` + // New hover handler
-                        `onmouseout="unstyleRoadName(this)" ` +  // New unhover handler
-                        `style="cursor: pointer;" ` + // Keep cursor pointer style
-                        `title="Copy road name">${value}</span><br>`;
-            } else {
-            html += `<b>${displayKey}:</b> ${value}<br>`;
-            }
+            // Add row to table
+            tableRows += `
+                <tr>
+                    <td class="popup-label">${displayKey}</td>
+                    <td class="popup-value">${formattedValue}</td>
+                </tr>`;
+            
+            // Add to copy text (plain text version)
             copyText += `${displayKey}: ${value}\n`;
         }
     });
 
-    if(copyText.length > 0){
-         html += '<hr><a href="#" onclick="copyRoadInfoToClipboard(this); return false;" ' +
-            'style="color: blue; cursor: pointer; text-decoration: underline; font-size: 0.9em;">Copy Road Info</a>';
-    }else {
-        html += '<hr>No detailed attribute data found for this road.';
+    // 6. Build complete HTML structure
+    if (tableRows.length > 0) {
+        html += `
+            <div class="popup-table-container">
+                <table class="popup-table">
+                    ${tableRows}
+                </table>
+            </div>`;
+        
+        html += `
+            <div class="popup-footer">
+                <button class="popup-action-btn" onclick="copyRoadInfoToClipboard(this); return false;">
+                    Copy All Info
+                </button>
+            </div>`;
+    } else {
+        html += '<div class="popup-no-data">No detailed attribute data found for this road.</div>';
     }
 
-   
+    // 7. Update popup content and display
     popupContent.dataset.copyText = copyText;
-    
     popupContent.innerHTML = html;
     popup.setPosition(coordinate);
     popupElement.style.display = 'block';
@@ -163,8 +244,8 @@ function copyRoadInfoToClipboard(linkElement) { // Changed parameter name to lin
         // Reset the link after a short delay
         setTimeout(() => {
             linkElement.textContent = originalText;
-            linkElement.style.color = originalColor; // Revert to original color (blue)
-            linkElement.style.textDecoration = 'underline'; // Restore underline
+            linkElement.style.color = originalColor;
+            linkElement.style.textDecoration = 'underline';
         }, 1500);
         
     }).catch(err => {
@@ -231,9 +312,9 @@ async function handleRoadInfoClick(evt) {
         return;
     }
 
-    // 2. WFS-on-Demand: If no local feature, query GeoServer for a road feature at the click point
+    // 2. WFS-on-Demand
     const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
-    const bufferDegrees = 0.00027; 
+    const bufferDegrees = 0.00020; 
     const minLon = lon - bufferDegrees;
     const minLat = lat - bufferDegrees;
     const maxLon = lon + bufferDegrees;
@@ -246,57 +327,53 @@ async function handleRoadInfoClick(evt) {
     const activeFeatures = features.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
 
     if (activeFeatures && activeFeatures.length > 0) {
-    const feature = activeFeatures[0];
+        const feature = activeFeatures[0];
 
-    const geometry = feature.getGeometry();
+        const geometry = feature.getGeometry();
 
-    let startDisplay = 'N/A';
-    let endDisplay = 'N/A';
+        let startDisplay = 'N/A';
+        let endDisplay = 'N/A';
 
-    if(geometry && geometry.getType() === 'LineString') {
+        if(geometry && geometry.getType() === 'LineString') {
 
-            // 1. CLONE the geometry to avoid modifying the original feature's geometry
-            const geometryClone = geometry.clone(); 
-            
-            // 2. EXPLICITLY transform the cloned geometry to EPSG:4326
-            // The original geometry is assumed to be in the map's view projection (e.g., 3857) 
-            // after the WFS reader parsed it, so we transform it back to 4326.
-            geometryClone.transform(map.getView().getProjection(), 'EPSG:4326');
-            
- const coords = geometryClone.getCoordinates();
+                const geometryClone = geometry.clone(); 
 
-            // Use a stronger check for the coords array
- if(Array.isArray(coords) && coords.length >= 2) {
- const startCoord = coords[0];
- const endCoord = coords[coords.length - 1];
+                geometryClone.transform(map.getView().getProjection(), 'EPSG:4326');
+                
+            const coords = geometryClone.getCoordinates();
 
-                // Since we explicitly transformed to 4326, the format is [LON, LAT]
- startDisplay = `${startCoord[1].toFixed(6)} ${startCoord[0].toFixed(6)}`; // LAT, LON
- endDisplay = `${endCoord[1].toFixed(6)} ${endCoord[0].toFixed(6)}`; // LAT, LON
+                    // Use a stronger check for the coords array
+            if(Array.isArray(coords) && coords.length >= 2) {
+                const startCoord = coords[0];
+                const endCoord = coords[coords.length - 1];
 
- } else if (Array.isArray(coords) && coords.length === 1) {
-                // Handle the rare case where the LineString is only a single point
-                const singleCoord = coords[0];
-                startDisplay = `${singleCoord[1].toFixed(6)} ${singleCoord[0].toFixed(6)}`;
-                endDisplay = 'N/A (Single Point)';
-            }
- }
+                                    // Since we explicitly transformed to 4326, the format is [LON, LAT]
+                    startDisplay = `${startCoord[1].toFixed(6)} ${startCoord[0].toFixed(6)}`; // LAT, LON
+                    endDisplay = `${endCoord[1].toFixed(6)} ${endCoord[0].toFixed(6)}`; // LAT, LON
 
- feature.set('start_node_coord', startDisplay);
- feature.set('end_node_coord', endDisplay);
+            } else if (Array.isArray(coords) && coords.length === 1) {
+                            // Handle the rare case where the LineString is only a single point
+                            const singleCoord = coords[0];
+                            startDisplay = `${singleCoord[1].toFixed(6)} ${singleCoord[0].toFixed(6)}`;
+                            endDisplay = 'N/A (Single Point)';
+                        }
+        }
 
-  // Show the popup using the newly fetched WFS feature
- showRoadInfo(feature, evt.coordinate);
+                feature.set('start_node_coord', startDisplay);
+                feature.set('end_node_coord', endDisplay);
 
- // Highlight the feature
-const roadClone = feature.clone();
- // The geometry for HIGHLIGHTING must remain transformed to the map's projection (3857)
- roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
- highlightLayer.getSource().addFeature(roadClone);
+                // Show the popup using the newly fetched WFS feature
+                showRoadInfo(feature, evt.coordinate);
 
- } else {
-hideRoadInfo();
- }
+                // Highlight the feature
+                const roadClone = feature.clone();
+                // The geometry for HIGHLIGHTING must remain transformed to the map's projection (3857)
+                roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
+                highlightLayer.getSource().addFeature(roadClone);
+
+    } else {
+        hideRoadInfo();
+    }
 }
 
 
@@ -316,7 +393,6 @@ function enableRoadInfoClick() {
     }
 }
 
-// **Initial Setup**: Start the listener active by default
 enableRoadInfoClick();
 
 

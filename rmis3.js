@@ -25,15 +25,12 @@ let measureTooltip;
  * @return {string} The formatted length (m or km).
  */
 const formatLength = function (line) {
-    // 1. Reproject the LineString geometry to EPSG:4326 (WGS 84)
-    // We clone the geometry and transform it to ensure accuracy.
+
     const transformedLine = line.clone().transform(
-        map.getView().getProjection(), // Source Projection (e.g., EPSG:3857)
-        'EPSG:4326'                    // Target Projection (WGS 84)
+        map.getView().getProjection(), 
+        'EPSG:4326'                   
     );
 
-    // 2. Calculate the geodetic length using the WGS 84 coordinates
-    // We explicitly tell ol.sphere.getLength the projection is 'EPSG:4326'
     const length = ol.sphere.getLength(transformedLine, { projection: 'EPSG:4326' });
     
     let output;
@@ -49,7 +46,7 @@ const formatLength = function (line) {
 
 // --- Function to create the measurement tooltip overlay ---
 function createMeasureTooltip() {
-    // Check if the element exists in the DOM and remove any previous instance
+
     if (measureTooltip) map.removeOverlay(measureTooltip); 
     
     // Create the OpenLayers overlay
@@ -105,14 +102,9 @@ function addInteraction() {
         sketch.set('listener', listener);
     });
 
-    // Listener for when the user finishes drawing a feature (double-click)
     measureDraw.on('drawend', function (evt) {
-        // Finalize the tooltip appearance
         measureTooltipElement.className = 'ol-tooltip ol-tooltip-static';
-        // Remove the 'change' listener from the feature
         ol.Observable.unByKey(evt.feature.get('listener'));
-
-        // Important: Stop the tool immediately after measurement ends
         toggleMeasurement(); 
     });
 }
@@ -160,3 +152,5 @@ if (measureBtn) {
         toggleMeasurement();
     });
 }
+
+

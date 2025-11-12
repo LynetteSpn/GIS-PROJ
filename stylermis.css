@@ -278,7 +278,9 @@ html, body {
 }
 
 #chainageTypeItemsContainer .legend-item,
-#roadTypeItemsContainer .legend-item {
+#roadTypeItemsContainer .legend-item,
+#lrmItemsContainer .legend-item,
+#BCItemsContainer .legend-item {
   padding-left: 20px;
   box-sizing: border-box;
 }
@@ -538,7 +540,9 @@ html, body {
 }
 
 .collapse-toggle,
-.toggle-group {
+.toggle-group,
+.toggle-list,
+.toggle-BC {
   margin-left: 8px;
   font-size: 12px;
   background: none;

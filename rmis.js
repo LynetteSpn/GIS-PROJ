@@ -53,11 +53,9 @@ satelliteLayer.setVisible(true);
 regularLayer.setVisible(false);
 regularLayer.setVisible(false);
 
-
 // =========================================================================
 // 2. STYLES 
 // =========================================================================
-
 // --- Base District Styles ---
 function osmDistrictStyle(feature) {
     const name = feature.get('NAME_2');
@@ -119,7 +117,7 @@ function highlightRoadStyle(feature) {
                 placement: 'line'
             })
         }),
-        new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255, 255, 0, 0.8)', width: 8 }) })
+        new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(0, 255, 242, 0.8)', width: 8 }) })
     ];
 }
 
@@ -159,7 +157,52 @@ const roadLayer = new ol.layer.Tile({
 });
 roadLayer.set('name', 'RoadLayer');
 
-// REMOVED: roadVectorLayer (the laggy WFS BBOX layer is gone)
+//CULVERT LAYER
+const culvertLayerSource = new ol.source.TileWMS({
+    url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+    params : {
+        'LAYERS' : 'rmisv2db_prod:tbl_culvert',
+        'TILED' : true,
+        'STYLES' : 'culvert_style'
+    },
+    serverType : 'geoserver'
+});
+
+const culvertLayer = new ol.layer.Tile({
+    source: culvertLayerSource,
+    opacity: 1,
+    visible: false
+});
+culvertLayer.set('name',"CulvertLayer");
+
+//BRIDGES LAYER
+const bridgeLayerSource = new ol.source.TileWMS({
+    url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+    params : {
+        'LAYERS' : 'rmisv2db_prod:tbl_bridge',
+        'TILED' : true,
+        'STYLES' : 'bridge_style'
+    },
+    serverType : 'geoserver'
+});
+
+const bridgeLayer = new ol.layer.Tile({
+    source: bridgeLayerSource,
+    opacity: 1,
+    visible: false
+});
+bridgeLayer.set('name',"BridgeLayer");
+
+//bridges and culverts group
+const bridgeCulvertGroup = new ol.layer.Group({
+    title: 'Bridges & Culverts',
+    layers: [
+        culvertLayer,
+        bridgeLayer
+    ],
+    visible:false
+});
+
 
 // CHAINAGE LAYER (WMS, controlled by legend)
 const chainageLayer = new ol.layer.Tile({
@@ -176,7 +219,23 @@ const chainageLayer = new ol.layer.Tile({
 });
 chainageLayer.set('name', 'ChainageLayer');
 
+//LMC ROAD LAYER
+const lmcRoadLayer = new ol.layer.Tile({
+    title: 'LMC2025',
+    source : new ol.source.TileWMS({
+        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+        params: {
+            'LAYERS': 'rmisv2db_prod:lmc_road',
+            'TILED': true,
+            'STYLES': 'lmc_style'
+        },
+        serverType: 'geoserver'
+    }),
+    visible: false,
+});
+lmcRoadLayer.set('name','lmcLayer');
 
+//SABAH DISTRICT LAYER
 const districtLayer = new ol.layer.Vector({
     source: new ol.source.Vector({
         url: './sabah_district.geojson',
@@ -203,6 +262,7 @@ const simplifiedSource = new ol.source.Vector({
     strategy: ol.loadingstrategy.bbox
 });
 
+//SELECTION HIGHLIGHTED LAYER (INTERACTIVE LAYER)
 const simplifiedLayer = new ol.layer.Vector({
   source: simplifiedSource,
   style: function(feature) {
@@ -216,20 +276,13 @@ const simplifiedLayer = new ol.layer.Vector({
 });
 simplifiedLayer.set('name', 'SimplifiedRoads');
 
-const sabahRoadGroup = new ol.layer.Group({
-    title: 'Sabah Roads',
-    layers: [
-        roadLayer,
-        chainageLayer
-    ]
-});
 
 // =========================================================================
 // 4. MAP INITIALIZATION 
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, sabahRoadGroup, districtLayer, highlightLayer],
+    layers: [baseGroup, lmcRoadLayer, roadLayer, chainageLayer, bridgeCulvertGroup, districtLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -380,9 +433,6 @@ async function getChainageRange(roadId) {
     }
 }
 
-
-
-
 // =========================================================================
 // 6. ROAD SEARCH & AUTOSUGGEST LOGIC (WFS-on-Demand Re-enabled)
 // ========================================================================
@@ -492,16 +542,12 @@ function zoomToFeature(feature) {
 
  if (feature && feature.getGeometry()) {
  
- // 1. Clone the feature to keep all properties (layer, road_name)
         const roadClone = feature.clone();
         
-        // 2. CRITICAL: Transform geometry from WFS (EPSG:4326) to Map View (EPSG:3857)
         roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
-        
-        // 3. Add the transformed feature to the highlight layer source.
+
  highlightLayer.getSource().addFeature(roadClone);
 
- // 4. Zoom to the extent of the *transformed* feature.
  const extent = roadClone.getGeometry().getExtent();
 
  map.getView().fit(extent, { 
@@ -513,9 +559,6 @@ function zoomToFeature(feature) {
  console.warn(`Feature not found or geometry missing for zooming.`);
  }
 }
-
-
-
 
 // Reset button logic
 document.getElementById("resetButton").addEventListener("click", function () {
@@ -578,12 +621,30 @@ function updateRoadFilter() {
     const finalCql = cqlFilter.length > 0 ? cqlFilter.join(' AND ') : '1=1';
     roadLayerSource.updateParams({ 'cql_filter': finalCql });
 }
+}
+
+function updateLmcRoadFilter() {
+    // Get the source of the LMC road layer
+    const lmcRoadSource = lmcRoadLayer.getSource();
+
+    let cqlFilter = '1=1'; // Default: show all
+
+    // Apply district filter if one is selected
+    if (currentDistrict !== "ALL") {
+        // Assuming the district code field name in the LMC layer is also 'district_code'
+        cqlFilter = `"district_code" = '${currentDistrict}'`;
+    }
+
+    // Update the WMS source parameters
+    lmcRoadSource.updateParams({ 
+        'cql_filter': cqlFilter 
+    });
+}
 
 // Clear highlight and search results after filter change
 highlightLayer.getSource().clear();
 document.getElementById("autocomplete-list").innerHTML = "";
 
-}
 
 
 //=========================================================================
@@ -598,6 +659,8 @@ document.getElementById("districtFilter").addEventListener("change", function (e
     currentDistrict = (selectedDistrictName === "ALL DISTRICTS") ? "ALL" : selectedDistrictValue;
 
     updateRoadFilter(); 
+    updateLmcRoadFilter();
+
     districtLayer.changed(); 
 
     if (selectedDistrictName === "ALL DISTRICTS") {
@@ -629,18 +692,42 @@ document.getElementById("districtFilter").addEventListener("change", function (e
 const legendDiv = document.getElementById("legend");
 // const legendContent = legendDiv.querySelector(".legend-content");
 const roadTypeItemsContainer = document.getElementById("roadTypeItemsContainer");
+const lrmItemsContainer = document.getElementById("lrmItemsContainer");
+const BCItemsContainer = document.getElementById("BCItemsContainer");
+
 const toggleRoadTypesBtn = document.getElementById("toggleRoadTypes");
 const toggleChainageBtn = document.getElementById("toggleChainage");
+const toggleLMCBtn = document.getElementById("toggleLMC");
+const toggleBCBtn = document.getElementById("toggleBC");
+
+let mcdcChainageItem;
+let lmcRoadItem;
+let bcItems;
+
+let areRoadTypesVisible = true;
+let areChainageTypesVisible = false;
+let areLMCTypesVisible = false;
+let areBCTypesVisible = false;
 
 const mcdcChainageData = {
     type: 'MCDC CHAINAGE',
     color: 'brown'
 };
-const chainageTyoeItemsContainer = document.getElementById("chainageTypeItemsContainer");
-let mcdcChainageItem;
 
-let areRoadTypesVisible = true;
-let areChainageTypesVisible = false;
+const lmcRoadData = {
+    type: 'LMC ROADS',
+    color: 'lightblue'
+}
+
+const bridgeData = {
+    type: 'Bridges',
+    color: 'deeppink'
+}
+
+const culvertData = {
+    type: 'Culverts',
+    color: 'cyan'
+}
 
 activeRoadTypes = new Set(Object.keys(roadColors)); // Start with all types active
 
@@ -663,6 +750,9 @@ if(toggleRoadTypesBtn && roadTypeItemsContainer) {
 }
 
 if(toggleChainageBtn && chainageTypeItemsContainer) {
+    chainageTypeItemsContainer.style.display = "none";
+    toggleChainageBtn.textContent = "+";
+    toggleChainageBtn.title = "Expand";
     toggleChainageBtn.addEventListener("click", function (e) {
          e.stopPropagation(); // Prevents issues if the label is clickable
          areChainageTypesVisible = !areChainageTypesVisible;
@@ -680,10 +770,50 @@ if(toggleChainageBtn && chainageTypeItemsContainer) {
     });
 }
 
+if(toggleLMCBtn && lrmItemsContainer) {
+    lrmItemsContainer.style.display = "none";
+    toggleLMCBtn.textContent="+";
+    toggleLMCBtn.title="Expand";
+    toggleLMCBtn.addEventListener("click", function (e) {
+         e.stopPropagation(); 
+         areLMCTypesVisible = !areLMCTypesVisible;
+
+     if (areLMCTypesVisible) {
+        lrmItemsContainer.style.display = "block";
+        toggleLMCBtn.textContent = "-";
+        toggleLMCBtn.title = "Collapse";
+    } else {
+             lrmItemsContainer.style.display = "none";
+             toggleLMCBtn.textContent = "+";
+             toggleLMCBtn.title = "Expand";
+         }
+     });
+}
+
+if(toggleBCBtn && BCItemsContainer){
+    BCItemsContainer.style.display = "none";
+    toggleBCBtn.textContent="+";
+    toggleBCBtn.title="Expand";
+    toggleBCBtn.addEventListener("click", function(e){
+        e.stopPropagation();
+        areBCTypesVisible = !areBCTypesVisible;
+
+        if(areBCTypesVisible){
+            BCItemsContainer.style.display = "block";
+            toggleBCBtn.textContent = "-";
+            toggleBCBtn.title = "Collapse";
+        }else {
+            BCItemsContainer.style.display="none";
+            toggleBCBtn.textContent = "+";
+            toggleBCBtn.title ="Expand";
+        }
+    });
+}
+
 // 9A. Build the legend content (items)
 for (const [layerType, color] of Object.entries(roadColors)) {
   const item = document.createElement("div");
-  item.className = "legend-item active"; // start active
+  item.className = "legend-item active"; // start disabled 
   item.dataset.layer = layerType;
 
   const colorBox = document.createElement("div");
@@ -743,10 +873,93 @@ if(chainageTypeItemsContainer) {
     mcdcChainageItem = item;
 }
 
+// New block for LMC Road Item
+if(lrmItemsContainer) {
+ const data = lmcRoadData;
 
+ const item = document.createElement("div");
+ item.id = "lmcRoadItem"; 
+ item.className = "legend-item disabled"; // Start disabled
+
+ const colorBox = document.createElement("span");
+ colorBox.className = "legend-color";
+ colorBox.style.backgroundColor = data.color;
+
+ const label = document.createElement("span");
+ label.textContent = data.type;
+
+ item.appendChild(colorBox);
+ item.appendChild(label);
+ 
+ lrmItemsContainer.appendChild(item);
+
+ lmcRoadItem = item;
+}
+
+// NEW: Map the legend type strings to the actual OpenLayers layer objects for easy reference
+const bcLayerMap = {
+    'Bridges': { layer: bridgeLayer, source: bridgeLayerSource },
+    'Culverts': { layer: culvertLayer, source: culvertLayerSource }
+};
+
+
+if(BCItemsContainer){
+    const dataItems = [bridgeData, culvertData];
+
+    dataItems.forEach(data => {
+        const layerType = data.type; // 'Bridges' or 'Culverts'
+        
+        const item = document.createElement("div");
+        item.id = `${layerType}Item`;
+        item.className = "legend-item disabled"; // Start disabled
+        
+        const colorBox = document.createElement("span");
+        colorBox.className = "legend-color";
+        colorBox.style.backgroundColor = data.color;
+
+        const label = document.createElement("span");
+        label.textContent = layerType;
+
+        item.appendChild(colorBox);
+        item.appendChild(label);
+
+        BCItemsContainer.appendChild(item);
+
+        item.addEventListener("click", () => {
+            const layerObjects = bcLayerMap[layerType];
+            if (!layerObjects) return; 
+
+            // 1. Check if master checkbox is ON (like the Sabah Roads layer)
+            if (!BCCheckbox.checked) {
+                return; 
+            }
+
+            const olLayer = layerObjects.layer;
+            const olSource = layerObjects.source;
+            const isVisible = olLayer.getVisible();
+
+            if (isVisible) {
+                // Turn OFF
+                olLayer.setVisible(false);
+                item.classList.remove("active");
+                item.classList.add("disabled");
+            } else {
+                // Turn ON
+                olLayer.setVisible(true);
+                item.classList.add("active");
+                item.classList.remove("disabled");
+                
+                // CRITICAL: Refresh to force a new WMS request
+                olSource.refresh(); 
+            }
+        });
+    });
+}
 
 const sabahRoadCheckbox = document.getElementById("sabahRoadCheckbox");
 const chainageCheckbox = document.getElementById("chainageCheckbox");
+const lmcRoadCheckbox = document.getElementById("lmcCheckbox");
+const BCCheckbox = document.getElementById("BCCheckbox");
 
 // --- Sabah Roads master control ---
 if (sabahRoadCheckbox) {
@@ -779,6 +992,34 @@ if (sabahRoadCheckbox) {
     });
 }
 
+//--- Bridges & Culverts (Master Control) ---
+if (BCCheckbox) {
+    BCCheckbox.addEventListener('change', function () {
+        const visible = this.checked;
+        if(culvertLayer) culvertLayer.setVisible(visible);
+        if(bridgeLayer) bridgeLayer.setVisible(visible);
+
+        if (bridgeCulvertGroup) bridgeCulvertGroup.setVisible(visible);
+
+        if (visible) {
+            if (culvertLayerSource) culvertLayerSource.refresh();
+            if (bridgeLayerSource) bridgeLayerSource.refresh(); 
+        }
+
+        const bcItems = document.querySelectorAll("#BCItemsContainer .legend-item");
+        bcItems.forEach(item => {
+            if (visible) {
+                item.classList.add("active");
+                item.classList.remove("disabled");
+            } else {
+                item.classList.remove("active");
+                item.classList.add("disabled");
+            }
+        });
+    });
+}
+
+
 // --- Chainage control ---
 if (chainageCheckbox) {
   chainageCheckbox.addEventListener('change', function () {
@@ -787,8 +1028,6 @@ if (chainageCheckbox) {
         // 1. Toggle WMS Layer visibility
         if (chainageLayer) chainageLayer.setVisible(visible);
 
-        // 2. Toggle the visual disabled/active state of the nested label
-        // Check if the dynamic item was successfully created
         if (mcdcChainageItem) { 
             if (visible) {
                 mcdcChainageItem.classList.add("active");
@@ -801,10 +1040,30 @@ if (chainageCheckbox) {
     });
 }
 
+//--- LRM Roads ---
+if(lmcRoadCheckbox){
+    lmcRoadCheckbox.addEventListener('change', function(){
+    const visible = this.checked;
+
+    if (lmcRoadLayer) lmcRoadLayer.setVisible(visible);
+
+    if (lmcRoadItem) { 
+        if (visible) {
+            lmcRoadItem.classList.add("active");
+            lmcRoadItem.classList.remove("disabled");
+        } else {
+            lmcRoadItem.classList.remove("active");
+            lmcRoadItem.classList.add("disabled");
+        }
+    }
+    });
+}
+
 
 // 9B. Legend toggle logic
 const legendToggleBtn = document.getElementById("minimize-legend");
-let isLegendMinimized = false;
+
+let isLegendMinimized = true;
 legendToggleBtn.addEventListener("click", function () {
     isLegendMinimized = !isLegendMinimized;
     legendDiv.classList.toggle("minimized", isLegendMinimized);
@@ -814,9 +1073,9 @@ legendToggleBtn.addEventListener("click", function () {
 });
 
 // Initial state
-legendDiv.classList.remove("minimized");
-legendToggleBtn.textContent = "-";
-legendToggleBtn.title = "Minimize Legend";
+legendDiv.classList.add("minimized");
+legendToggleBtn.textContent = "+";
+legendToggleBtn.title = "Maximize Legend";
 
 // =========================================================================
 // 10. LATITUDE AND LONGITUDE DISPLAY
