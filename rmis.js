@@ -359,7 +359,7 @@ function queryWFS(cqlFilter) {
     // We are requesting the geometry and attributes for filtering/highlighting
     const url = (
         'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
-        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_centerline&' + // ✅ CORRECTED: Targets Road Attribute Layer
+        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_road_map&' + 
         'outputFormat=application/json&srsName=EPSG:4326&' +
         'cql_filter=' + encodeURIComponent(cqlFilter)+
         '&_=' + Date.now()
