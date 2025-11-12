@@ -142,7 +142,7 @@ function districtFilterStyle(feature) {
 const roadLayerSource = new ol.source.TileWMS({
     url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
     params: {
-        'LAYERS': 'rmisv2db_prod:gis_sabah_road_map',
+        'LAYERS': 'rmisv2db_prod:vw_road_map2',
         'STYLES': 'road_style',
         'TILED': true,
         'cql_filter': '1=1' 
@@ -251,31 +251,6 @@ const highlightLayer = new ol.layer.Vector({
     source: new ol.source.Vector(),
     style: highlightRoadStyle
 });
-
-const simplifiedSource = new ol.source.Vector({
-    format: new ol.format.GeoJSON(),
-    url: function (extent,resolution,projection) {
-        const srs = projection.getCode();
-        const bbox = extent.join(',');
-        return `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:output&outputFormat=application/json&srsName=${srs}&bbox=${bbox},${srs}&maxFeatures=200`;
-    },
-    strategy: ol.loadingstrategy.bbox
-});
-
-//SELECTION HIGHLIGHTED LAYER (INTERACTIVE LAYER)
-const simplifiedLayer = new ol.layer.Vector({
-  source: simplifiedSource,
-  style: function(feature) {
-    // invisible fill, but we can highlight on hover; keep simple or null for invisible
-    return new ol.style.Style({
-      stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0)', width: 1 }),
-      fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' })
-    });
-  },
-  declutter: true
-});
-simplifiedLayer.set('name', 'SimplifiedRoads');
-
 
 // =========================================================================
 // 4. MAP INITIALIZATION 
@@ -1088,10 +1063,6 @@ map.on('pointermove', function (evt) {
 
     document.getElementById('coords').innerHTML = `Lat: ${lat}, Lng: ${lon}`;
 
-      const hit = map.hasFeatureAtPixel(evt.pixel, {
-    layerFilter: function(layer) { return layer === simplifiedLayer; }
-  });
- map.getTargetElement().style.cursor = hit ? 'pointer' : '';
 
 });
 
