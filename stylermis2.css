@@ -1,7 +1,7 @@
 /* =========================================================================
    IMPROVED ROAD INFO POPUP STYLING - Modern Table Design
    ========================================================================= */
-
+/* Hover effect for the asset list table */
 .ol-popup {
     position: absolute;
     background: rgba(15, 102, 12, 0.95);
@@ -255,6 +255,31 @@
     text-align: center;
     color: #999;
     font-style: italic;
+}
+
+.btn-next {
+    background-color: #007bff; /* Blue for navigation */
+    color: white;
+    border-color: #007bff;
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Space between text and arrow */
+}
+
+.btn-next:hover {
+    background-color: #0056b3; /* Darker Blue on hover */
+    border-color: #0056b3;
+    transform: translateX(3px); /* Subtle movement effect */
+}
+
+/* Ensure the footer lays out buttons side-by-side */
+.popup-footer {
+    display: flex;
+    justify-content: space-between; /* Spreads buttons apart */
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
 }
 
 /* Responsive adjustments */

@@ -2,7 +2,11 @@ let currentSearchField = 'road_name'; // Default search field
 const filterOptions = {
     'road_name': 'Road Name',
     'pkm_road_id': 'PKM ID',
-    'marris_id': 'Marris ID'
+    'marris_id': 'Marris ID',
+    'zone_name': 'Zone Name',
+    'taman': 'Area Name',
+    'rdcat_code' : 'Road Category',
+    'dun_code': 'DUN Code'
 };
 
 // Global filter variables
@@ -142,7 +146,7 @@ function districtFilterStyle(feature) {
 const roadLayerSource = new ol.source.TileWMS({
     url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
     params: {
-        'LAYERS': 'rmisv2db_prod:vw_road_map2',
+        'LAYERS': 'rmisv2db_prod:gis_sabah_road_map',
         'STYLES': 'road_style',
         'TILED': true,
         'cql_filter': '1=1' 
@@ -312,15 +316,27 @@ basemapButton.addEventListener('click', function () {
 // Ensure initial state is set correctly (required due to the new variable)
 setBasemap(currentBasemap);
 
+//OPTIMIOZE VERSION ROAD SEARCH FILTER 
+const searchTypeToView = {
+    'road_name':'gis_sabah_road_map',
+    'pkm_road_id':'gis_sabah_road_map',
+    'marris_id':'gis_sabah_road_map',
+    'zone_name':'vw_search_zone_name', // need to configure new query in geoserver
+    'taman':'vw_search_taman', // need to configure new query in geoserver
+    'rdcat_code':'vw_search_rdcat_code', // need to configure new query in geoserver
+    'dun_code':'vw_search_dun_code' // need to configure new query in geoserver
+};
+
 // =========================================================================
 // WFS HELPER FUNCTION (Targeted query only)
 // =========================================================================
 /**
  * Executes a targeted WFS query to GeoServer based on a filter.
+ * @param {string} viewName - Name of the geoserver view/layer to query.
  * @param {string} cqlFilter - The CQL filter string.
  * @returns {Promise<ol.Feature[]>} A promise that resolves with an array of OpenLayers features.
  */
-function queryWFS(cqlFilter) {
+function queryWFS(viewName, cqlFilter) {
     let finalCql = cqlFilter;
 
     if(activeRoadTypes.size > 0 && activeRoadTypes.size < Object.keys(roadColors).length) {
@@ -334,16 +350,17 @@ function queryWFS(cqlFilter) {
     // We are requesting the geometry and attributes for filtering/highlighting
     const url = (
         'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
-        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_road_map&' + 
+        'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:'+ viewName + '&' +
         'outputFormat=application/json&srsName=EPSG:4326&' +
-        'cql_filter=' + encodeURIComponent(cqlFilter)+
+        'cql_filter=' + encodeURIComponent(finalCql)+ // Use finalCql here
+        '&maxFeatures=100' +
         '&_=' + Date.now()
     );
 
     return fetch(url)
         .then(response => {
             if (!response.ok) {
-                throw new Error(`WFS request failed with status: ${response.status}`);
+                return response.text().then(text => { throw new Error(`WFS request failed: ${text.substring(0, 150)}...`); });
             }
             return response.json();
         })
@@ -353,9 +370,118 @@ function queryWFS(cqlFilter) {
         })
         .catch(error => {
             console.error("Error fetching WFS data:", error);
+            document.getElementById("autocomplete-list").innerHTML = "";
             return [];
         });
 }
+
+const SPATIAL_LAYER = 'rmisv2db_prod:gis_sabah_road_map';
+const ATTRIBUTE_LAYER = 'rmisv2db_prod:vw_road_map2';
+const DIRECT_SEARCH_FIELDS = ['road_name', 'pkm_road_id', 'marris_id'];
+
+//THIS IS FOR THE FETCHING AVAILABILITY OF CULVERTS AND BRIDGES 
+//FOR SHOWINFO POPUP (IF CHECKBOXBC IS CHECKED)
+// =========================================================================
+// DEEP DEBUG: FETCH NEARBY ASSETS
+// =========================================================================
+async function fetchNearbyAssets(lon, lat) {
+    console.log(`%c 🔍 STARTING ASSET SEARCH at ${lat}, ${lon}`, 'background: #222; color: #bada55');
+    
+    const bcCheckbox = document.getElementById("BCCheckbox");
+    if (!bcCheckbox || !bcCheckbox.checked) {
+        console.log("Asset Search skipped: Checkbox OFF or Missing.");
+        return [];
+    }
+
+    // Increased buffer slightly to ensure we catch the feature
+    const buffer = 0.00050; 
+    const cql = `BBOX(geom, ${lon - buffer}, ${lat - buffer}, ${lon + buffer}, ${lat + buffer}, 'EPSG:4326')`;
+    
+    const queries = [
+        { type: 'Bridge', layer: 'rmisv2db_prod:tbl_bridge' },
+        { type: 'Culvert', layer: 'rmisv2db_prod:tbl_culvert' }
+    ];
+
+    const promises = queries.map(async (q) => {
+        const url = (
+            'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+            'version=1.0.0&request=GetFeature&typeName=' + q.layer + '&' +
+            'outputFormat=application/json&cql_filter=' + encodeURIComponent(cql) +
+            '&maxFeatures=5&_=' + Date.now()
+        );
+
+        try {
+            const res = await fetch(url);
+            
+            // 1. Check Network Status
+            if (!res.ok) {
+                console.error(`HTTP Error for ${q.type}: ${res.status}`);
+                return [];
+            }
+
+            // 2. Read RAW TEXT first (Debugging Step)
+            const text = await res.text();
+
+            // 3. Parse JSON manually
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error(`JSON Parse Error for ${q.type}. Server likely sent XML.`, e);
+                return [];
+            }
+
+            // 4. Check Features
+            if (data && data.features && data.features.length > 0) {
+                console.log(`FOUND ${data.features.length} ${q.type}(s)!`);
+                return data.features.map(f => {
+                    f.properties._assetType = q.type;
+                    return f;
+                });
+            } else {
+                console.log(`0 features found for ${q.type}`);
+                return [];
+            }
+
+        } catch (err) {
+            console.error(`CRITICAL FETCH ERROR for ${q.type}:`, err);
+            return [];
+        }
+    });
+
+    const results = await Promise.all(promises);
+    const finalAssets = results.flat().filter(item => item !== null && item !== undefined);
+    return finalAssets;
+}
+
+// Helper: Fetch extended attributes from the heavy view using ID
+async function fetchExtendedAttributes(roadId) {
+    // We filter by ID, which is extremely fast even on large tables
+    const cql = `pkm_road_id = '${roadId}'`;
+    
+    const url = (
+        'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        'version=1.0.0&request=GetFeature&' +
+        'typeName=rmisv2db_prod:vw_road_map2&' + 
+        'outputFormat=application/json&' +
+        'cql_filter=' + encodeURIComponent(cql) +
+        '&maxFeatures=1&_=' + Date.now()
+    );
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Attribute fetch failed");
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+            return data.features[0].properties; // Return just the properties
+        }
+    } catch (err) {
+        console.warn("Could not fetch extended attributes:", err);
+    }
+    return null;
+}
+
 
 async function getChainageRange(roadId) {
     // Layer name confirmed from your chainage WMS layer:
@@ -428,7 +554,13 @@ roadSearchInput.disabled = false; // Re-enabled
 
 // This function now uses WFS to search the GeoServer
 async function fetchRoadNames(searchText) {
-    autocompleteList.innerHTML = "Searching GeoServer...";
+    autocompleteList.innerHTML = "Searching...";
+
+    const viewName = searchTypeToView[currentSearchField];
+    if (!viewName) {
+        autocompleteList.innerHTML = "Invalid search field.";
+        return;
+    }
     
     // 1. Build the CQL Filter for GeoServer
     // Use ILIKE for case-insensitive partial matching
@@ -446,8 +578,7 @@ async function fetchRoadNames(searchText) {
     }
 
     // 2. Query GeoServer to get filtered features
-    const features = await queryWFS(cql);
-    lastSearchResults = features; // Store for zooming later
+    const features = await queryWFS(viewName, cql);
     
     // 3. Extract unique road names/IDs from the results
     const results = [...new Set(
@@ -470,11 +601,97 @@ function renderAutocomplete(results, fieldName) {
             roadSearchInput.value = value;
             autocompleteList.innerHTML = "";
 
-            const featureToZoom = lastSearchResults.find(f => f.get(fieldName) === value);
-            zoomToFeature(featureToZoom); 
+            // Call a new function to fetch the full feature with geometry
+            fetchAndZoomToFeature(fieldName, value);
         });
         autocompleteList.appendChild(item);
     });
+}
+
+// =========================================================================
+// SEARCH FUNCTION: ZOOMS AND FETCHES DETAILS
+// =========================================================================
+async function fetchAndZoomToFeature(fieldName, fieldValue) {
+    let features = [];
+    let cql = `${fieldName} = '${fieldValue}'`;
+    if (currentDistrict !== "ALL") cql += ` AND district_code = '${currentDistrict}'`;
+
+    document.body.style.cursor = 'wait';
+
+    try {
+        // --- STEP 1: FIND ROAD (Same as your logic) ---
+        if (DIRECT_SEARCH_FIELDS.includes(fieldName)) {
+            const url = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${SPATIAL_LAYER}&outputFormat=application/json&srsName=EPSG:4326&cql_filter=${encodeURIComponent(cql)}&maxFeatures=100&_=${Date.now()}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            features = new ol.format.GeoJSON().readFeatures(data);
+        } else {
+            // Indirect logic (keep your existing indirect logic here)
+            const idUrl = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${ATTRIBUTE_LAYER}&outputFormat=application/json&propertyName=pkm_road_id&cql_filter=${encodeURIComponent(cql)}&maxFeatures=500&_=${Date.now()}`;
+            const idRes = await fetch(idUrl);
+            const idData = await idRes.json();
+            if (idData.features && idData.features.length > 0) {
+                const ids = [...new Set(idData.features.map(f => f.properties.pkm_road_id).filter(Boolean))];
+                if(ids.length > 0) {
+                    const geomCql = `pkm_road_id IN (${ids.map(id => `'${id}'`).join(',')})`;
+                    const geomUrl = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${SPATIAL_LAYER}&outputFormat=application/json&srsName=EPSG:4326&cql_filter=${encodeURIComponent(geomCql)}&_=${Date.now()}`;
+                    const geomRes = await fetch(geomUrl);
+                    const geomData = await geomRes.json();
+                    features = new ol.format.GeoJSON().readFeatures(geomData);
+                }
+            }
+        }
+
+        // --- STEP 2: PROCESS RESULTS ---
+        if (features.length > 0) {
+            zoomToFeatures(features);
+
+            // ONLY OPEN POPUP IF SINGLE RESULT (or direct search)
+            if (features.length === 1 || DIRECT_SEARCH_FIELDS.includes(fieldName)) {
+                const mainFeature = features[0];
+                const roadId = mainFeature.get('pkm_road_id');
+
+                if (roadId) {
+                    const extendedProps = await fetchExtendedAttributes(roadId);
+                    if (extendedProps) {
+                        mainFeature.setProperties(extendedProps);
+
+                        // Calculate Geom Center
+                        const geom = mainFeature.getGeometry();
+                        const extent = geom.getExtent();
+                        const center = ol.extent.getCenter(extent); // EPSG:3857
+                        
+                        // Convert Center to LatLon for Asset Query
+                        const centerLonLat = ol.proj.toLonLat(center);
+
+                        // Calculate Coordinates Strings
+                        if (!mainFeature.get('start_chainage') && geom) {
+                             const clone = geom.clone().transform(map.getView().getProjection(), 'EPSG:4326');
+                             const coords = clone.getCoordinates();
+                             if(coords.length >= 2) {
+                                const start = coords[0];
+                                const end = coords[coords.length-1];
+                                mainFeature.set('start_node_coord', `${start[1].toFixed(6)} ${start[0].toFixed(6)}`);
+                                mainFeature.set('end_node_coord', `${end[1].toFixed(6)} ${end[0].toFixed(6)}`);
+                             }
+                        }
+
+                        // --- NEW: FETCH ASSETS FOR SEARCH RESULT ---
+                        const nearbyAssets = await fetchNearbyAssets(centerLonLat[0], centerLonLat[1]);
+
+                        // Trigger Popup
+                        showRoadInfo(mainFeature, center, nearbyAssets);
+                    }
+                }
+            }
+        } else {
+            alert("No road geometry found.");
+        }
+    } catch (err) {
+        console.error("Search Error:", err);
+    } finally {
+        document.body.style.cursor = 'default';
+    }
 }
 
 // Event listener calls the asynchronous function
@@ -510,29 +727,41 @@ minimizeToolbarBtn.addEventListener("click", function () {
 });
 
 // =========================================================================
-// zoomToFeature FUNCTION (FINAL FIX: Clean Cloning and Direct Extent)
+// zoomToFeatures FUNCTION (Handles multiple features and collective extent)
 // =========================================================================
-function zoomToFeature(feature) {
- highlightLayer.getSource().clear(); // Clear previous highlights
+function zoomToFeatures(features) {
+    highlightLayer.getSource().clear(); // Clear previous highlights
 
- if (feature && feature.getGeometry()) {
- 
-        const roadClone = feature.clone();
-        
-        roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
+    if (features && features.length > 0) {
+        let fullExtent = ol.extent.createEmpty();
 
- highlightLayer.getSource().addFeature(roadClone);
-
- const extent = roadClone.getGeometry().getExtent();
-
- map.getView().fit(extent, { 
-            duration: 1000, 
-            maxZoom: 17,
-            padding: [50, 50, 50, 50]
+        features.forEach(feature => {
+            if (feature.getGeometry()) {
+                const roadClone = feature.clone();
+                
+                // Transform geometry to map projection before adding and calculating extent
+                roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
+                
+                highlightLayer.getSource().addFeature(roadClone);
+                
+                // Extend the collective extent with the current feature's extent
+                ol.extent.extend(fullExtent, roadClone.getGeometry().getExtent());
+            }
         });
- } else {
- console.warn(`Feature not found or geometry missing for zooming.`);
- }
+
+        // Check if a valid extent was calculated
+        if (!ol.extent.isEmpty(fullExtent)) {
+            map.getView().fit(fullExtent, { 
+                duration: 1000, 
+                maxZoom: 17,
+                padding: [50, 50, 50, 50]
+            });
+        } else {
+            console.warn(`Features found but geometries were missing or invalid for zooming.`);
+        }
+    } else {
+        console.warn(`No features found for zooming and highlighting.`);
+    }
 }
 
 // Reset button logic
@@ -655,6 +884,7 @@ document.getElementById("districtFilter").addEventListener("change", function (e
             duration: 1000,
             padding: [80, 80, 80, 80]
         });
+        highlightLayer.getSource().clear();
     } else {
         console.warn(`District '${selectedDistrictName}' not found in districtLayer.`);
     }
@@ -1052,21 +1282,3 @@ legendDiv.classList.add("minimized");
 legendToggleBtn.textContent = "+";
 legendToggleBtn.title = "Maximize Legend";
 
-// =========================================================================
-// 10. LATITUDE AND LONGITUDE DISPLAY
-// =========================================================================
-//Latitude and Longitude display on mouse move
-map.on('pointermove', function (evt) {
-    const coord = ol.proj.toLonLat(evt.coordinate);
-    const lon = coord[0].toFixed(5);
-    const lat = coord[1].toFixed(5);
-
-    document.getElementById('coords').innerHTML = `Lat: ${lat}, Lng: ${lon}`;
-
-
-});
-
-// At the absolute bottom of rmis.js
-if (typeof initTooltipLogic === 'function') {
-    initTooltipLogic();
-}

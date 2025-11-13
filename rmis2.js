@@ -1,4 +1,22 @@
 // =========================================================================
+// 10. LATITUDE AND LONGITUDE DISPLAY
+// =========================================================================
+//Latitude and Longitude display on mouse move
+map.on('pointermove', function (evt) {
+    const coord = ol.proj.toLonLat(evt.coordinate);
+    const lon = coord[0].toFixed(5);
+    const lat = coord[1].toFixed(5);
+
+    document.getElementById('coords').innerHTML = `Lat: ${lat}, Lng: ${lon}`;
+});
+
+// At the absolute bottom of rmis.js
+if (typeof initTooltipLogic === 'function') {
+    initTooltipLogic();
+}
+
+
+// =========================================================================
 //  SHARE LOCATION FUNCTION & OVERLAY
 // =========================================================================
 
@@ -60,162 +78,217 @@ let lockedPopup = false;
 
 // In popup.js
 
-function showRoadInfo(feature, coordinate) {
+// =========================================================================
+// showRoadInfo with "Next" Button Logic (for)
+// =========================================================================
+function showRoadInfo(feature, coordinate, nearbyAssets = []) {
     const props = feature.getProperties();
-
-    // Skip district features
-    if (props['NAME_2']) { 
-        return;
-    }
+    if (props['NAME_2']) return;
 
     // 1. Prepare Click Coordinates
     const clickedLonLat = ol.proj.toLonLat(coordinate);
     const clickedLat = clickedLonLat[1].toFixed(6);
     const clickedLon = clickedLonLat[0].toFixed(6);
     
-    // 2. Define Attributes & Content Variables
-    const allowedKeys = [
-        'road_name', 
-        'pkm_road_id', 
-        'marris_id', 
-        'district_code', 
-        'layer', 
-        'road_length', 
-        'start_node_coord', 
-        'end_node_coord'
-    ]; 
-    
     let copyText = '';
     let tableRows = '';
-    let roadNameForCopy = '';
 
-    // 3. Build popup header
+    // 2. Define Fields (Same as before)
+    const fields = [
+        { key: 'district_name', label: 'District', fallbackKey: 'district_code' },
+        { key: 'layer', label: 'Road Type' },
+        { key: 'road_name', label: 'Road Name' },
+        { key: 'pkm_road_id', label: 'PKM ID' },
+        { key: 'marris_id', label: 'Marris ID' },
+        { key: 'gis_length', label: 'Actual On-site Length' },
+        { key: 'marris_length', label: 'MARRIS Length' },
+        { key: 'total_pv_length', label: 'Maintenance Length' },
+        { key: 'reg_srt', label: 'SRT' },
+        { key: 'start_node_coord', label: 'Start Chainage' },
+        { key: 'end_node_coord', label: 'End Chainage' }
+    ];
+
     let html = '<div class="popup-header">Road Information</div>';
     
-    // 4. Add clicked location section
+    // --- FOOTER BUTTONS SETUP ---
+    
+    // Button 1: Copy (Left side)
+    let copyBtnHtml = `
+        <button class="popup-action-btn" onclick="copyRoadInfoToClipboard(this); return false;">
+            <i class="fas fa-copy"></i> Copy Info
+        </button>`;
+
+    // Button 2: Next (Right side - Only if assets exist)
+    let nextBtnHtml = '';
+
+    if (nearbyAssets && nearbyAssets.length > 0) {
+        popupContent.dataset.assets = JSON.stringify(nearbyAssets);
+        
+        // Styled as a "Next" navigation button
+        nextBtnHtml = `
+            <button class="popup-action-btn btn-next" onclick="showAssetList(); return false;">
+                Next (${nearbyAssets.length}) &rarr;
+            </button>`;
+    }
+
+    // 4. Add Clicked Location
     html += `
         <div class="popup-location-section">
-            <span class="location-label">Clicked:</span>
+            <span class="location-label">Clicked Location:</span>
             <span class="location-value">${clickedLat}, ${clickedLon}</span>
         </div>`;
     
-    copyText += `CLICKED LOCATION\nLat: ${clickedLat}, Lng: ${clickedLon}\n\n`;
-    copyText += `ROAD INFORMATION\n`;
+    copyText += `CLICKED: ${clickedLat}, ${clickedLon}\n\n`;
 
-    // 5. Build table rows for road attributes
-    allowedKeys.forEach(key => {
-        const rawValue = props[key];
-        let value;
+    // 5. Loop through fields (Standard Table Logic)
+    fields.forEach(field => {
+        let val = props[field.key];
+        if ((val === null || val === undefined || val === '') && field.fallbackKey) val = props[field.fallbackKey];
+        if (val === null || val === undefined || val === 'null') val = '-';
+
+        let displayValue = val;
+
+        if (['gis_length', 'marris_length', 'total_pv_length'].includes(field.key) && val !== '-') displayValue = `${val} KM`;
         
-        const isCoordKey = key === 'start_node_coord' || key === 'end_node_coord';
-
-        if (rawValue !== null && rawValue !== undefined && rawValue !== '' || isCoordKey) {
-            
-            if (isCoordKey && (rawValue === null || rawValue === undefined)) {
-                value = "N/A";
-            } else {
-                value = rawValue;
-            }
-            
-            // Get display label and format value
-            let displayKey;
-            let formattedValue = value;
-            let valueClass = '';
-            
-            switch (key) {
-                case 'road_name': 
-                    displayKey = 'Road Name';
-                    roadNameForCopy = value;
-                    formattedValue = `<span class="road-name-clickable" 
-                        onclick="copyRoadNameOnly(this, '${value.replace(/'/g, "\\'")}')" 
-                        title="Click to copy road name">${value}</span>`;
-                    break;
-                    
-                case 'pkm_road_id': 
-                    displayKey = 'PKM Road ID'; 
-                    break;
-                    
-                case 'marris_id': 
-                    displayKey = 'Marris ID'; 
-                    break;
-                    
-                case 'district_code': 
-                    displayKey = 'District'; 
-                    break;
-                    
-                case 'layer': 
-                    displayKey = 'Road Type';
-                    const typeMap = {
-                        'UNID': { text: 'Unregistered', class: 'unid' },
-                        'FEDERAL': { text: 'Federal', class: 'federal' },
-                        'JKR': { text: 'JKR', class: 'jkr' },
-                        'MCDC': { text: 'MCDC', class: 'mcdc' },
-                        'PLANTATION': { text: 'Plantation', class: 'plantation' },
-                        'JLN KAMPUNG': { text: 'Jln Kampung', class: 'kampung' },
-                        'OTHER': { text: 'Other', class: 'other' }
-                    };
-                    const typeInfo = typeMap[value] || { text: value, class: 'other' };
-                    formattedValue = `<span class="road-type-badge road-type-${typeInfo.class}">${typeInfo.text}</span>`;
-                    break;
-                    
-                case 'road_length': 
-                    displayKey = 'Length';
-                    const lengthKm = (parseFloat(value) / 1000).toFixed(2);
-                    formattedValue = `${parseFloat(value).toFixed(2)} m (${lengthKm} km)`;
-                    break;
-                    
-                case 'start_node_coord': 
-                    displayKey = 'Start Node';
-                    formattedValue = `<span class="coord-value">${value}</span>`;
-                    break;
-                    
-                case 'end_node_coord': 
-                    displayKey = 'End Node';
-                    formattedValue = `<span class="coord-value">${value}</span>`;
-                    break;
-                    
-                default: 
-                    displayKey = key.replace(/_/g, ' ').toUpperCase();
-            }
-
-            // Add row to table
-            tableRows += `
-                <tr>
-                    <td class="popup-label">${displayKey}</td>
-                    <td class="popup-value">${formattedValue}</td>
-                </tr>`;
-            
-            // Add to copy text (plain text version)
-            copyText += `${displayKey}: ${value}\n`;
+        if (field.key === 'layer' && val !== '-') {
+            const typeMap = {'UNID':'unid','FEDERAL':'federal','JKR':'jkr','MCDC':'mcdc','PLANTATION':'plantation','JLN KAMPUNG':'kampung','OTHER':'other'};
+            const cssClass = typeMap[val] || 'other';
+            displayValue = `<span class="road-type-badge road-type-${cssClass}">${val}</span>`;
         }
+
+        if (field.key === 'road_name' && val !== '-') {
+             displayValue = `<span class="road-name-clickable" onclick="copyRoadNameOnly(this, '${val.replace(/'/g, "\\'")}')" title="Click to copy">${val}</span>`;
+        }
+        if (['start_node_coord', 'end_node_coord'].includes(field.key) && val !== '-') {
+             displayValue = `<span class="coord-value">${val}</span>`;
+        }
+
+        tableRows += `<tr><td class="popup-label">${field.label}</td><td class="popup-value">${displayValue}</td></tr>`;
+        
+        let cleanVal = val.toString().replace(/<[^>]*>?/gm, ''); 
+        if (['gis_length', 'marris_length', 'total_pv_length'].includes(field.key) && val !== '-') cleanVal += ' KM';
+        copyText += `${field.label}: ${cleanVal}\n`;
     });
 
-    // 6. Build complete HTML structure
-    if (tableRows.length > 0) {
-        html += `
-            <div class="popup-table-container">
-                <table class="popup-table">
-                    ${tableRows}
-                </table>
-            </div>`;
+    // 6. Final Assembly
+    html += `
+        <div class="popup-table-container">
+            <table class="popup-table">${tableRows}</table>
+        </div>
         
-        html += `
-            <div class="popup-footer">
-                <button class="popup-action-btn" onclick="copyRoadInfoToClipboard(this); return false;">
-                    Copy All Info
-                </button>
-            </div>`;
-    } else {
-        html += '<div class="popup-no-data">No detailed attribute data found for this road.</div>';
-    }
+        <div class="popup-footer">
+            ${copyBtnHtml}
+            ${nextBtnHtml}
+        </div>`;
 
-    // 7. Update popup content and display
     popupContent.dataset.copyText = copyText;
+    popupContent.dataset.roadHtml = html; 
     popupContent.innerHTML = html;
     popup.setPosition(coordinate);
     popupElement.style.display = 'block';
     lockedPopup = true; 
 }
+
+// Function to switch the popup view to the Asset List
+window.showAssetList = function() {
+    const assetsStr = document.getElementById('road-popup-content').dataset.assets;
+    if (!assetsStr) return;
+
+    const assets = JSON.parse(assetsStr);
+    let html = '<div class="popup-header">Nearby Assets</div>';
+
+    // Create a clickable list of assets
+    html += '<div class="popup-table-container"><table class="popup-table asset-list-table">';
+    
+    assets.forEach((asset, index) => {
+        const p = asset.properties;
+        const type = p._assetType; // 'Bridge' or 'Culvert'
+        
+        // Determine a display ID based on type
+        let displayId = type === 'Bridge' ? (p.structure_no || p.bridge_name) : (p.cv_structure_no || 'Unknown ID');
+        if(!displayId) displayId = "Unnamed Asset";
+
+        html += `
+            <tr onclick="showAssetDetail(${index})" style="cursor:pointer;">
+                <td class="popup-label"><span class="road-type-badge road-type-${type === 'Bridge' ? 'jkr' : 'mcdc'}">${type}</span></td>
+                <td class="popup-value" style="text-decoration:underline; color:blue;">${displayId}</td>
+            </tr>`;
+    });
+
+    html += '</table></div>';
+
+    // Footer with Back Button
+    html += `
+        <div class="popup-footer">
+            <button class="popup-action-btn" onclick="restoreRoadView(); return false;">
+                &larr; Back to Road
+            </button>
+        </div>`;
+
+    document.getElementById('road-popup-content').innerHTML = html;
+};
+
+// Function to show details of a specific asset
+window.showAssetDetail = function(index) {
+    const assetsStr = document.getElementById('road-popup-content').dataset.assets;
+    const assets = JSON.parse(assetsStr);
+    const asset = assets[index];
+    const p = asset.properties;
+    const type = p._assetType;
+
+    let html = `<div class="popup-header">${type} Details</div>`;
+    let tableRows = '';
+
+    // Define fields to show based on type
+    // You can adjust these keys based on your actual DB columns
+    let fields = [];
+    if (type === 'Bridge') {
+        fields = [
+            { k: 'structure_no', l: 'Structure ID' },
+            { k: 'br_type_code', l: 'Type' },
+            { k: 'br_chn_start', l: 'Start Chainage' },
+            { k: 'br_chn_end', l: 'End Chainage' },
+            { k: 'br_length', l: 'Length (m)' }
+        ];
+    } else {
+        fields = [
+            { k: 'cv_structure_no', l: 'Structure ID' },
+            { k: 'cv_type_code', l: 'Type' },
+            { k: 'cv_chn_start', l: 'Start Chainage' },
+            { k: 'cv_chn_end', l: 'End Chainage' },
+            { k: 'cv_length', l: 'Length (m)' }
+        ];
+    }
+
+    fields.forEach(f => {
+        if(p[f.k]) {
+            tableRows += `<tr><td class="popup-label">${f.l}</td><td class="popup-value">${p[f.k]}</td></tr>`;
+        }
+    });
+
+    html += `<div class="popup-table-container"><table class="popup-table">${tableRows}</table></div>`;
+
+    // Footer controls
+    html += `
+        <div class="popup-footer" style="display:flex; justify-content:space-between;">
+            <button class="popup-action-btn" onclick="showAssetList(); return false;">
+                &larr; List
+            </button>
+            <button class="popup-action-btn" onclick="restoreRoadView(); return false;">
+                Road Info
+            </button>
+        </div>`;
+
+    document.getElementById('road-popup-content').innerHTML = html;
+};
+
+// Function to go back to the main Road Info
+window.restoreRoadView = function() {
+    const roadHtml = document.getElementById('road-popup-content').dataset.roadHtml;
+    if (roadHtml) {
+        document.getElementById('road-popup-content').innerHTML = roadHtml;
+    }
+};
 
 function styleRoadName(spanElement) {
     spanElement.style.color = 'blue';
@@ -292,90 +365,108 @@ popupCloser.onclick = function (evt) {
 let roadInfoListener = null; 
 
 
-// --- Function to handle the actual road info logic (MOVED from inside map.on) ---
+// =========================================================================
+// CORRECTED CLICK HANDLER (Ensures Asset Button Always Appears)
+// =========================================================================
 async function handleRoadInfoClick(evt) {
-    // Use the global 'lockedPopup' variable defined above this section.
-    if (lockedPopup) {
-        hideRoadInfo(); 
-    }
-
+    // 1. Clear existing popup/highlights if locked
+    if (lockedPopup) hideRoadInfo();
     highlightLayer.getSource().clear();
 
-    // 1. Check for District or Highlight clicks first (local features)
-    let localFeature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
-        if (layer && layer.get('name') === 'DistrictLayer') return null;
-        return f;
+    let feature = null;
+
+    // 2. STRATEGY A: Check if we clicked an existing feature (District or Highlight)
+    const localFeature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
+       // Ignore the district layer, we only care about roads
+       if (layer && layer.get('name') === 'DistrictLayer') return null;
+       return f;
     });
 
     if (localFeature) {
-        showRoadInfo(localFeature, evt.coordinate);
-        return;
+        feature = localFeature; // Found it locally!
+    } 
+    else {
+        // 3. STRATEGY B: WFS Spatial Query (If nothing clicked locally)
+        const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
+        const bufferDegrees = 0.0080;
+        const cql = `BBOX(geom, ${lon - bufferDegrees}, ${lat - bufferDegrees}, ${lon + bufferDegrees}, ${lat + bufferDegrees}, 'EPSG:4326')`;
+
+        // Query the Light Layer for geometry
+        const features = await queryWFS('gis_sabah_road_map', cql);
+        
+        // Filter by active types
+        const activeFeatures = features.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
+
+        if (activeFeatures && activeFeatures.length > 0) {
+            feature = activeFeatures[0];
+        }
     }
 
-    // 2. WFS-on-Demand
-    const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
-    const bufferDegrees = 0.00020; 
-    const minLon = lon - bufferDegrees;
-    const minLat = lat - bufferDegrees;
-    const maxLon = lon + bufferDegrees;
-    const maxLat = lat + bufferDegrees;
+    // 4. PROCESS THE FEATURE (Unified Logic)
+    if (feature) {
+        const roadId = feature.get('pkm_road_id');
 
-    const cql = `BBOX(geom, ${minLon}, ${minLat}, ${maxLon}, ${maxLat}, 'EPSG:4326')`;
+        // A. Fetch Heavy Attributes (The Pivot)
+        if (roadId) {
+            document.body.style.cursor = 'wait';
+            const extendedProps = await fetchExtendedAttributes(roadId);
+            document.body.style.cursor = 'default';
 
-    const features = await queryWFS(cql);
-
-    const activeFeatures = features.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
-
-    if (activeFeatures && activeFeatures.length > 0) {
-        const feature = activeFeatures[0];
-
-        const geometry = feature.getGeometry();
-
-        let startDisplay = 'N/A';
-        let endDisplay = 'N/A';
-
-        if(geometry && geometry.getType() === 'LineString') {
-
-                const geometryClone = geometry.clone(); 
-
-                geometryClone.transform(map.getView().getProjection(), 'EPSG:4326');
-                
-            const coords = geometryClone.getCoordinates();
-
-                    // Use a stronger check for the coords array
-            if(Array.isArray(coords) && coords.length >= 2) {
-                const startCoord = coords[0];
-                const endCoord = coords[coords.length - 1];
-
-                                    // Since we explicitly transformed to 4326, the format is [LON, LAT]
-                    startDisplay = `${startCoord[1].toFixed(6)} ${startCoord[0].toFixed(6)}`; // LAT, LON
-                    endDisplay = `${endCoord[1].toFixed(6)} ${endCoord[0].toFixed(6)}`; // LAT, LON
-
-            } else if (Array.isArray(coords) && coords.length === 1) {
-                            // Handle the rare case where the LineString is only a single point
-                            const singleCoord = coords[0];
-                            startDisplay = `${singleCoord[1].toFixed(6)} ${singleCoord[0].toFixed(6)}`;
-                            endDisplay = 'N/A (Single Point)';
-                        }
+            if (extendedProps) {
+                feature.setProperties(extendedProps);
+            }
         }
 
-                feature.set('start_node_coord', startDisplay);
-                feature.set('end_node_coord', endDisplay);
+        // B. Calculate Chainage Coordinates (Fallback logic)
+        let startDisplay = feature.get('start_chainage'); 
+        let endDisplay = feature.get('end_chainage');
 
-                // Show the popup using the newly fetched WFS feature
-                showRoadInfo(feature, evt.coordinate);
+        if (!startDisplay || !endDisplay) {
+            const geometry = feature.getGeometry();
+            if(geometry && geometry.getType() === 'LineString') {
+                // Ensure we clone and transform safely
+                const geometryClone = geometry.clone();
+                // Transform to 4326 for coordinate extraction if strictly needed, 
+                // or just extract if your map view is 4326. Assuming map is 3857:
+                geometryClone.transform(map.getView().getProjection(), 'EPSG:4326'); 
+                
+                const coords = geometryClone.getCoordinates();
+                if(Array.isArray(coords) && coords.length >= 2) {
+                    startDisplay = `${coords[0][1].toFixed(6)} ${coords[0][0].toFixed(6)}`;
+                    endDisplay = `${coords[coords.length - 1][1].toFixed(6)} ${coords[coords.length - 1][0].toFixed(6)}`;
+                } 
+            }
+        }
+        feature.set('start_node_coord', startDisplay || 'N/A');
+        feature.set('end_node_coord', endDisplay || 'N/A');
 
-                // Highlight the feature
-                const roadClone = feature.clone();
-                // The geometry for HIGHLIGHTING must remain transformed to the map's projection (3857)
-                roadClone.getGeometry().transform('EPSG:4326', map.getView().getProjection());
-                highlightLayer.getSource().addFeature(roadClone);
+        // C. CRITICAL FIX: ALWAYS FETCH ASSETS
+        // Get click coordinates in Lat/Lon for the asset query
+        const [clickLon, clickLat] = ol.proj.toLonLat(evt.coordinate);
+        const nearbyAssets = await fetchNearbyAssets(clickLon, clickLat);
+
+        // D. Show Popup (Passing the Assets!)
+        showRoadInfo(feature, evt.coordinate, nearbyAssets);
+
+        // E. Highlight the feature
+        const roadClone = feature.clone();
+        // Ensure highlight geometry is in map projection (EPSG:3857)
+        const geom = roadClone.getGeometry();
+        if (geom) {
+             // If source was 4326 (WFS), transform it. 
+             // If it was already 3857 (Local), transform might be redundant but usually safe if projections match.
+             // Best practice: Transform 'EPSG:4326' to View Projection. 
+             // If the feature is from local layer, it might already be projected.
+             // We can re-read the geometry from WFS source to be safe, 
+             // OR just rely on visual check. This standard transform is usually fine:
+             geom.transform('EPSG:4326', map.getView().getProjection());
+        }
+        highlightLayer.getSource().addFeature(roadClone);
 
     } else {
         hideRoadInfo();
     }
 }
-
 
 // --- Control Functions to manage activation ---
 
