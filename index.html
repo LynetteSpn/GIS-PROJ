@@ -4,18 +4,20 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>RMIS Basemap Switcher</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+        <link rel="stylesheet" href="https://unpkg.com/simplebar@latest/dist/simplebar.css" />
         <link rel="stylesheet" href="./stylermis.css">
         <link rel="stylesheet" href="./stylermis2.css">
     </head>
 
     <body>
+        <div id="route-banner" class="route-banner"></div>
         <div id="map" class="map"></div>
         <div id="coords" style="position: absolute; bottom: 10px; left: 50%; color:white; background-color: rgba(15, 102, 12, 0.15);">
         Lat: -, Lng: -
         </div>
 
         <!-- <div id="road-tooltip" class="ol-tooltip"></div> -->
-        <div id="road-popup" class ="ol-popup">
+        <div id="road-popup" class ="ol-popup" data-simplebar>
             <a href="#" id="road-popup-closer" class="ol-popup-closer">&times;</a>
             <div id="road-popup-content"></div>
         </div>
@@ -63,10 +65,14 @@
                         <option value="road_name">Road Name</option>
                         <option value="pkm_road_id">PKM ID</option>
                         <option value="marris_id">Marris ID</option>
+                        <option value="zone_name">Zone Name</option>
+                        <option value="taman">Area Name</option>
+                        <option value="rdcat_code">Road Category</option>
+                        <option value="dun_code">DUN Code</option>
                     </select>
 
                     <div class="search-wrapper"> 
-                        <input type="text" id="roadSearch" placeholder="Search Road Name">
+                        <input type="text" id="roadSearch" placeholder="Search ">
                         <div id="autocomplete-list" class="autocomplete-items"></div>
                     </div>
 
@@ -81,8 +87,15 @@
                 <button id="center-button" title="Exxtend Map"><img src="extend.png"></button>
                 <button id="locate-btn" title="Locate Me"><img src="locate.png"></button>
                 <button id="measure-btn" title="Measure Distance/Area"><img src="measure.png"></button>
+                <button id="route-btn" title="Navigate"><img src="direction.png"></button>
             </div>
             <button id="minimize-sidebar" title="Minimize Sidebar">-</button> 
+
+            <div id="route-options-panel" class="route-options-panel">
+            <div class="route-option-header"> <strong>Route Options</strong></div>
+                <button id="btn-route-from-gps" class="route-option-btn">From Current Location</button>
+                <button id="btn-route-manual" class="route-option-btn">Select on Map</button>
+            </div>
         </div>
 
         <div id="legend" class="legend">
@@ -128,6 +141,7 @@
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+        <script src="https://unpkg.com/simplebar@latest/dist/simplebar.min.js"></script>
         <script src="rmis.js"></script> 
         <script src="rmis2.js"></script>
         <script src="rmis3.js"></script>

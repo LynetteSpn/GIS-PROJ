@@ -78,9 +78,9 @@ let lockedPopup = false;
 
 // In popup.js
 
-// =========================================================================
-// showRoadInfo with "Next" Button Logic (for)
-// =========================================================================
+// ===========================================================================
+// showRoadInfo with "Next" Button Logic (for Bridge and Culvert detail info)
+// ===========================================================================
 function showRoadInfo(feature, coordinate, nearbyAssets = []) {
     const props = feature.getProperties();
     if (props['NAME_2']) return;
@@ -195,7 +195,7 @@ window.showAssetList = function() {
     if (!assetsStr) return;
 
     const assets = JSON.parse(assetsStr);
-    let html = '<div class="popup-header">Nearby Assets</div>';
+    let html = '<div class="popup-header">Nearby Bridge/Culvert</div>';
 
     // Create a clickable list of assets
     html += '<div class="popup-table-container"><table class="popup-table asset-list-table">';
@@ -361,12 +361,10 @@ popupCloser.onclick = function (evt) {
     hideRoadInfo();
 };
 
-// --- Control Variable (Defined here, accessible globally) ---
-let roadInfoListener = null; 
 
 
 // =========================================================================
-// CORRECTED CLICK HANDLER (Ensures Asset Button Always Appears)
+// CLICK HANDLER (Ensures Asset Button Always Appears)
 // =========================================================================
 async function handleRoadInfoClick(evt) {
     // 1. Clear existing popup/highlights if locked
@@ -388,7 +386,7 @@ async function handleRoadInfoClick(evt) {
     else {
         // 3. STRATEGY B: WFS Spatial Query (If nothing clicked locally)
         const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
-        const bufferDegrees = 0.0080;
+        const bufferDegrees = 0.0001;
         const cql = `BBOX(geom, ${lon - bufferDegrees}, ${lat - bufferDegrees}, ${lon + bufferDegrees}, ${lat + bufferDegrees}, 'EPSG:4326')`;
 
         // Query the Light Layer for geometry
@@ -426,8 +424,6 @@ async function handleRoadInfoClick(evt) {
             if(geometry && geometry.getType() === 'LineString') {
                 // Ensure we clone and transform safely
                 const geometryClone = geometry.clone();
-                // Transform to 4326 for coordinate extraction if strictly needed, 
-                // or just extract if your map view is 4326. Assuming map is 3857:
                 geometryClone.transform(map.getView().getProjection(), 'EPSG:4326'); 
                 
                 const coords = geometryClone.getCoordinates();
@@ -453,12 +449,7 @@ async function handleRoadInfoClick(evt) {
         // Ensure highlight geometry is in map projection (EPSG:3857)
         const geom = roadClone.getGeometry();
         if (geom) {
-             // If source was 4326 (WFS), transform it. 
-             // If it was already 3857 (Local), transform might be redundant but usually safe if projections match.
-             // Best practice: Transform 'EPSG:4326' to View Projection. 
-             // If the feature is from local layer, it might already be projected.
-             // We can re-read the geometry from WFS source to be safe, 
-             // OR just rely on visual check. This standard transform is usually fine:
+
              geom.transform('EPSG:4326', map.getView().getProjection());
         }
         highlightLayer.getSource().addFeature(roadClone);
@@ -470,22 +461,21 @@ async function handleRoadInfoClick(evt) {
 
 // --- Control Functions to manage activation ---
 
-function disableRoadInfoClick() {
-    if (roadInfoListener) {
-        ol.Observable.unByKey(roadInfoListener);
-        roadInfoListener = null; 
-    }
-}
+// function disableRoadInfoClick() {
+//     if (roadInfoListener) {
+//         ol.Observable.unByKey(roadInfoListener);
+//         roadInfoListener = null; 
+//     }
+// }
 
-function enableRoadInfoClick() {
-    if (!roadInfoListener) {
-        // Re-attach the click listener, linking it to the handler function
-        roadInfoListener = map.on('singleclick', handleRoadInfoClick);
-    }
-}
+// function enableRoadInfoClick() {
+//     if (!roadInfoListener) {
+//         // Re-attach the click listener, linking it to the handler function
+//         roadInfoListener = map.on('singleclick', handleRoadInfoClick);
+//     }
+// }
 
-enableRoadInfoClick();
-
+// enableRoadInfoClick();
 
 
 // =========================================================================

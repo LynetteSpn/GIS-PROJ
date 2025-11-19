@@ -102,6 +102,8 @@ const roadColors = {
     'FEDERAL': 'purple'
 };
 
+
+
 // --- Highlight Style (Used for WFS-on-Demand result) ---
 function highlightRoadStyle(feature) {
     // This style expects the feature to be a full vector feature fetched via WFS
@@ -114,7 +116,7 @@ function highlightRoadStyle(feature) {
             stroke: new ol.style.Stroke({ color: color, width: 3 }),
             text: new ol.style.Text({
                 text: roadName,
-                font: 'bold 20px Calibri,sans-serif',
+                font: 'bold 10px Calibri,sans-serif',
                 fill: new ol.style.Fill({ color: '#000' }),
                 stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
                 overflow: true,
@@ -256,12 +258,38 @@ const highlightLayer = new ol.layer.Vector({
     style: highlightRoadStyle
 });
 
+//PGROUTING ROUTE LAYER
+const routeSource = new ol.source.Vector();
+
+const routeLayer = new ol.layer.Vector({
+    source: routeSource,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({
+            color: '#00ff6aff',
+            width: 6
+        })
+    })
+})
+
+const routeMarkerSource = new ol.source.Vector();
+const routeMarkerLayer = new ol.layer.Vector({
+    source: routeMarkerSource,
+    style: new ol.style.Style({
+        image: new ol.style.Style({
+            radius: 8,
+            fill: new ol.style.Fill({color: '#ff0000'}),
+            stroke: new ol.style.Stroke({color: '#ffffff', width: 2})   
+        })
+    })
+});
+
+
 // =========================================================================
 // 4. MAP INITIALIZATION 
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, lmcRoadLayer, roadLayer, chainageLayer, bridgeCulvertGroup, districtLayer, highlightLayer],
+    layers: [baseGroup, lmcRoadLayer, roadLayer, chainageLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -849,8 +877,6 @@ function updateLmcRoadFilter() {
 highlightLayer.getSource().clear();
 document.getElementById("autocomplete-list").innerHTML = "";
 
-
-
 //=========================================================================
 // DISTRICT FILTER
 //=========================================================================
@@ -914,6 +940,8 @@ let areChainageTypesVisible = false;
 let areLMCTypesVisible = false;
 let areBCTypesVisible = false;
 
+const defaultDisabledTypes = ['UNID', 'FEDERAL','JKR'];
+
 const mcdcChainageData = {
     type: 'MCDC CHAINAGE',
     color: 'brown'
@@ -934,7 +962,10 @@ const culvertData = {
     color: 'cyan'
 }
 
-activeRoadTypes = new Set(Object.keys(roadColors)); // Start with all types active
+activeRoadTypes = new Set(
+    Object.keys(roadColors).filter(type => !defaultDisabledTypes.includes(type)
+)); //Define default active and inactive legend layers
+
 
 if(toggleRoadTypesBtn && roadTypeItemsContainer) {
     toggleRoadTypesBtn.addEventListener("click", function (e) {
@@ -1018,7 +1049,13 @@ if(toggleBCBtn && BCItemsContainer){
 // 9A. Build the legend content (items)
 for (const [layerType, color] of Object.entries(roadColors)) {
   const item = document.createElement("div");
-  item.className = "legend-item active"; // start disabled 
+
+  if(activeRoadTypes.has(layerType)){
+    item.className = "legend-item active"; //update the html div class for css purpose (active class)
+  } else {
+    item.className = "legend-item disabled"; //(inactive class)
+  }
+
   item.dataset.layer = layerType;
 
   const colorBox = document.createElement("div");
@@ -1049,8 +1086,15 @@ for (const [layerType, color] of Object.entries(roadColors)) {
       item.classList.add("active");
       item.classList.remove("disabled");
     }
-    updateRoadFilter();
+
+    if (typeof updateRoadFilter === 'function'){
+            updateRoadFilter();
+    }
   });
+}
+
+if(typeof updateRoadFilter === 'function'){
+    updateRoadFilter();
 }
 
 if(chainageTypeItemsContainer) {
