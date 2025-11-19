@@ -11,7 +11,7 @@ A prototype web application for road maintenance management and routing in Sabah
 
 ---
 
-## ⚙️ Installation & Setup
+## Installation & Setup
 
 ### 1. Database Setup (The Important Part) 
 
