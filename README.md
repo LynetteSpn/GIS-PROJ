@@ -5,7 +5,7 @@ A prototype web application for road maintenance management and routing in Sabah
 ## Architecture Overview
 
 * **Frontend:** OpenLayers 8 (HTML/JS hosted on Apache).
-* **Backend API:** Node.js & Express (Handles routing logic between Frontend and Database).
+* **Backend API:** Node.js (Handles routing logic between Frontend and Database).
 * **Map Server:** GeoServer (Serves WMS tiles for visualization and WFS for data queries).
 * **Database:** PostgreSQL 18 + PostGIS + pgRouting 4.
 
