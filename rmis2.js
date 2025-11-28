@@ -15,11 +15,9 @@ if (typeof initTooltipLogic === 'function') {
     initTooltipLogic();
 }
 
-
 // =========================================================================
 //  SHARE LOCATION FUNCTION & OVERLAY
 // =========================================================================
-
 // New overlay for the share info popup
 let sharePopup = new ol.Overlay({ 
     element: document.createElement('div'), 
@@ -42,24 +40,6 @@ function copyCoordsToClipboard(lat, lon) {
 }
 
 // =========================================================================
-// 11. SIDEBAR MINIMIZE/EXPAND
-// =========================================================================
-const sidebar = document.getElementById('side-toolbar');
-const minimizeSidebarBtn = document.getElementById('minimize-sidebar');
-
-minimizeSidebarBtn.addEventListener('click', () => { 
-    sidebar.classList.toggle('minimized');
-
-    if (sidebar.classList.contains('minimized')) { 
-        minimizeSidebarBtn.textContent = '+';
-        minimizeSidebarBtn.title = 'Show Sidebar';
-    } else {
-        minimizeSidebarBtn.textContent = '-';
-        minimizeSidebarBtn.title = 'Hide Sidebar';
-    }
-});
-
-// =========================================================================
 // 12. TOOLTIP POPUP FOR ROAD INFO (WFS-on-Demand Click)
 // =========================================================================
 const popupElement = document.getElementById('road-popup');
@@ -77,7 +57,6 @@ map.addOverlay(popup);
 let lockedPopup = false;
 
 // In popup.js
-
 // ===========================================================================
 // showRoadInfo with "Next" Button Logic (for Bridge and Culvert detail info)
 // ===========================================================================
@@ -361,8 +340,6 @@ popupCloser.onclick = function (evt) {
     hideRoadInfo();
 };
 
-
-
 // =========================================================================
 // CLICK HANDLER (Ensures Asset Button Always Appears)
 // =========================================================================
@@ -474,9 +451,7 @@ async function handleRoadInfoClick(evt) {
 //         roadInfoListener = map.on('singleclick', handleRoadInfoClick);
 //     }
 // }
-
 // enableRoadInfoClick();
-
 
 // =========================================================================
 // 13. LOCATE ME BUTTON 
