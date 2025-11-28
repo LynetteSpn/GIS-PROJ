@@ -56,10 +56,16 @@
 }
 
 .simplebar-scrollbar::before {
-    background-color: rgba(0, 0, 0, 0.3); /* Custom thumb color */
+    background-color: rgba(0, 0, 0, 0.4); /* Dark grey bar */
+    width: 4px; /* Thin style */
+    border-radius: 4px;
+    opacity: 0.5;
 }
+
+/* Move the vertical scrollbar slightly to the left so it doesn't touch the border */
 .simplebar-track.simplebar-vertical {
-    width: 8px; /* Custom track width */
+    width: 8px;
+    margin-right: 2px;
 }
 
 #road-popup-content {
@@ -310,24 +316,33 @@
 /* === NEW ROUTE OPTIONS PANEL === */
 .route-options-panel {
     position: absolute;
-    left: 100%; /* Puts it to the right of the sidebar */
-    top: 180px;  /* Aligns with your 5th button (route-btn) */
-    width: 200px;
-    background: rgba(15, 102, 12, 0.15);
-    border-radius: 5px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    left: 100%;
+    top: 180px;
+    width: 230px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     z-index: 1001;
-    display: none; /* Hidden by default */
-    margin-left: 10px; /* Small gap from the sidebar */
+    display: none;
+    margin-left: 15px;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .route-option-header {
-    padding: 10px;
-    border-bottom: rgb(15, 102, 12, 0.3) solid 1px;
-    background: rgb(5, 61, 0);
-    border-radius: 10px;
-    font-size: 14px;
-    color: #ffffff;
+    background: linear-gradient(135deg, rgb(5, 61, 0) 0%, rgb(3, 45, 0) 100%);
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid rgb(3, 45, 0);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .route-option-btn {
@@ -339,6 +354,7 @@
     text-align: left;
     font-size: 13px;
     cursor: pointer;
+    
 }
 
 .route-option-btn:hover {
@@ -360,6 +376,276 @@
     .popup-label {
         width: 35%;
     }
+}
+
+/* ==========================================
+   OPTIMIZATION PANEL STYLES - MODERN REDESIGN
+   ========================================== */
+
+.optimization-panel {
+    position: absolute;
+    left: 100%;
+    top: 180px;
+    width: 230px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    display: none;
+    margin-left: 15px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.optimization-header {
+    background: linear-gradient(135deg, rgb(5, 61, 0) 0%, rgb(3, 45, 0) 100%);
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid rgb(3, 45, 0);
+}
+
+.optimization-title {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.optimization-close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.optimization-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Job List Container */
+.job-list-container {
+    font: 10px;
+    height: 200px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    overflow-y: auto;
+}
+
+.job-list-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #999;
+    padding: 20px;
+}
+
+.empty-text {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.empty-hint {
+    font-size: 12px;
+    font-style: italic;
+    color: #bbb;
+}
+
+/* Individual Job Items in the list */
+.job-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    transition: all 0.2s ease;
+}
+
+.job-item:last-child {
+    border-bottom: none;
+}
+
+.job-item:hover {
+    background-color: #f0f7ff;
+    transform: translateX(4px);
+}
+
+/* The "Number" badge in the list (1, 2, 3...) */
+.job-number {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    text-align: center;
+    line-height: 24px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-right: 10px;
+    display: inline-block;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+/* Actions Container */
+.optimization-actions {
+    padding: 10px 10px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Modern Button Styles */
+.optimization-btn {
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.optimization-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.optimization-btn:active {
+    transform: translateY(0);
+}
+
+.btn-icon {
+    font-size: 16px;
+}
+
+/* Scan Critical Button */
+#btn-scan-critical {
+    background: linear-gradient(135deg, #ff6b6b 0%, #d32f2f 100%) !important;
+    color: white !important;
+    border: 2px solid transparent !important;
+}
+
+#btn-scan-critical:hover {
+    background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%) !important;
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4) !important;
+}
+
+/* Add Locations Button */
+#btn-add-jobs {
+    background: white !important;
+    color: #007bff !important;
+    border: 2px solid #007bff !important;
+}
+
+#btn-add-jobs:hover {
+    background: #007bff !important;
+    color: white !important;
+}
+
+#btn-add-jobs.active {
+    background: #ffebee !important;
+    color: #d62222 !important;
+    border: 2px solid #d62222 !important;
+    animation: pulse-add 1.5s infinite;
+}
+
+@keyframes pulse-add {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(214, 34, 34, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(214, 34, 34, 0);
+    }
+}
+
+/* Optimize Route Button */
+#btn-run-tsp {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%) !important;
+    color: white !important;
+    border: none !important;
+}
+
+#btn-run-tsp:hover {
+    background: linear-gradient(135deg, #1e7e34 0%, #155724 100%) !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4) !important;
+}
+
+/* Clear List Button */
+#btn-clear-jobs {
+    background: white !important;
+    color: #dc3545 !important;
+    border: 1px solid #dc3545 !important;
+    font-size: 12px !important;
+}
+
+#btn-clear-jobs:hover {
+    background: #dc3545 !important;
+    color: white !important;
+    border-color: #dc3545 !important;
+}
+
+/* Scrollbar for job list */
+.job-list-container .simplebar-scrollbar::before {
+    background-color: rgba(0, 0, 0, 0.3);
+    width: 4px;
+    border-radius: 4px;
+}
+
+.job-list-container .simplebar-track.simplebar-vertical {
+    width: 8px;
+    margin-right: 2px;
+}
+
+/* Floating Action Bar (The "Edit Mode" Pill) */
+.floating-action-bar {
+    position: absolute;
+    bottom: 30px; /* Sits at the bottom */
+    left: 50%;
+    transform: translateX(-50%);
+    
+    background-color: #007bff; /* Blue background */
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px; /* Pill shape */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    z-index: 3000; /* Above everything */
+    
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popUp {
+    from { transform: translate(-50%, 50px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
 }
 
 /* =========================================================================
@@ -513,4 +799,100 @@
     50% {
         box-shadow: 0 0 30px rgba(0, 255, 150, 0.8), 0 4px 16px rgba(0, 255, 150, 0.6);
     }
+}
+
+@media (max-width: 500px) {
+/* Move the Route Panel to the Bottom Center on phones */
+    .route-options-panel {
+        left: 50% !important;        
+        transform: translateX(-50%); 
+        top: auto !important;        
+        bottom: 80px;                
+        
+        width: 90%;                  
+        max-width: 350px;            
+        
+        margin-left: 0;              
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.3); 
+        
+        /* Override the desktop animation */
+        animation: slideUp 0.3s ease-out;
+    }
+    
+    @keyframes slideUp {
+        from { transform: translate(-50%, 20px); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+    }
+
+    /* Make buttons bigger for touch */
+    .route-option-btn {
+        padding: 18px 20px;      
+        font-size: 16px;         
+    }
+    
+    /* Adjust the Instruction Banner */
+    .route-banner {
+        top: 0px;               
+        width: 100%;              
+        font-size: 12px;         
+        text-align: center;
+    }
+
+    /* Mobile Optimization Panel Positioning */
+    .optimization-panel {
+        left: 50% !important;
+        transform: translateX(-50%);
+        top: auto !important;
+        bottom: 80px;
+        width: 90%;
+        max-width: 250px;
+        height: 350px;
+        margin-left: 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        animation: slideUp 0.3s ease-out;
+        overflow-y: auto;
+    }
+
+    .optimization-header{
+        font : 14px;
+        padding: 10px;
+    }
+
+    .optimization-close-btn{
+        width : 15px;
+        height : 15px;
+        font-size : 12px;
+        padding: 10px;
+    }
+    /* Adjust job list height for mobile */
+    .optimization-panel .job-list-container {
+        height: 150px;
+        max-height: 30vh;
+    }
+
+    /* Make optimization buttons touch-friendly */
+    .optimization-panel .optimization-btn {
+        padding:5px;
+        font-size: 12px;
+        min-height: 30px; /* Better touch target */
+    }
+
+    /* Smaller icons on mobile */
+    .optimization-panel .btn-icon {
+        font-size: 12px;
+    }
+
+    /* Adjust empty state text */
+    .optimization-panel .empty-icon {
+        font-size: 32px;
+    }
+
+    .optimization-panel .empty-text {
+        font-size: 13px;
+    }
+
+    .optimization-panel .empty-hint {
+        font-size: 11px;
+    }
+
 }

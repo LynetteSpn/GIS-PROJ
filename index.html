@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>RMIS Basemap Switcher</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
@@ -12,9 +13,12 @@
     <body>
         <div id="route-banner" class="route-banner"></div>
         <div id="map" class="map"></div>
-        <div id="coords" style="position: absolute; bottom: 10px; left: 50%; color:white; background-color: rgba(15, 102, 12, 0.15);">
-        Lat: -, Lng: -
+
+        <div class="ol-control extend-control">
+            <button id="center-button" title="Exxtend Map">E</button>
         </div>
+
+        <div id="coords"> Lat: -, Lng: -</div>
 
         <!-- <div id="road-tooltip" class="ol-tooltip"></div> -->
         <div id="road-popup" class ="ol-popup" data-simplebar>
@@ -25,7 +29,6 @@
         <div id="toolbar" class="toolbar">
              <button id="minimize-toolbar" title="Minimize Toolbar">-</button>
             <div id="toolbar-content" class="toolbar-content">
-
                 
                     <div id="toolbar-title" class="toolbar-title">Search</div>
 
@@ -83,24 +86,58 @@
 
         <div id="side-toolbar" class="side-toolbar">
             <div id="sidebar-content" class="sidebar-content">
+                <button id="legend-toggle-btn" title="Toggle Legend"><img src="legend.png"></button>
                 <button id="switchBasemap" title="Switch Basemap"><img src="layers.png"></button>
-                <button id="center-button" title="Exxtend Map"><img src="extend.png"></button>
                 <button id="locate-btn" title="Locate Me"><img src="locate.png"></button>
                 <button id="measure-btn" title="Measure Distance/Area"><img src="measure.png"></button>
-                <button id="route-btn" title="Navigate"><img src="direction.png"></button>
+                <button id="route-btn" title="Routing"><img src="direction.png"></button>
+                <button id="optimize-btn" title="Multi-Stop Routing"><img src="optimisation.png"></button>
             </div>
-            <button id="minimize-sidebar" title="Minimize Sidebar">-</button> 
 
             <div id="route-options-panel" class="route-options-panel">
             <div class="route-option-header"> <strong>Route Options</strong></div>
-                <button id="btn-route-from-gps" class="route-option-btn">From Current Location</button>
-                <button id="btn-route-manual" class="route-option-btn">Select on Map</button>
+                <button id="btn-route-from-gps" class="route-option-btn" style="color: black;">From Current Location</button>
+                <button id="btn-route-manual" class="route-option-btn" style="color: black;">Select on Map</button>
             </div>
+
+                <div id="optimization-panel" class="optimization-panel" style="display: none; min-height: 250px; width: 280px;">
+                    <div class="optimization-header">
+                        <button id="btn-back-menu" style="display:none; background:none; border:none; color:white; cursor:pointer; font-weight:bold; margin-right:10px;">⬅</button>
+                        <span class="optimization-title" id="opt-title">Route Planner</span>
+                        <button id="btn-close-opt" class="optimization-close-btn">x</button>
+                    </div>
+
+                    <div id="opt-main-menu" style="padding: 20px;">
+                        <p style="font-size:12px; color:#666; margin-bottom:15px; text-align:center;">Select planning mode:</p>
+                        <button id="btn-mode-manual" class="route-option-btn" style="border:1px solid #007bff; color:#007bff; margin-bottom:10px;">Manual Selection</button>
+                        <button id="btn-mode-bridge" class="route-option-btn" style="border:1px solid #d62222; color:#d62222; margin-bottom:10px;">Fix Bridges</button>
+                        <button id="btn-mode-culvert" class="route-option-btn" style="border:1px solid #e67e22; color:#e67e22;">Fix Culverts</button>
+                    </div>
+
+                    <div id="opt-workspace" style="display: none; flex-direction: column; ">
+                        <div id="job-list" class="job-list-container" data-simplebar>
+                            <div class="job-list-empty"><div class="empty-text">No jobs added</div></div>
+                        </div>
+                        
+                        <div class="optimization-actions">
+                            <button id="btn-add-jobs" class="optimization-btn btn-add">+ Add Locations</button>
+                            <button id="btn-run-tsp" class="optimization-btn btn-optimize">Optimize Route</button>
+                            <button id="btn-clear-jobs" class="optimization-btn btn-clear">Clear List</button>
+                        </div>
+                    </div>
+            </div>
+        </div>
+
+        <div id="adding-mode-bar" class="floating-action-bar" style="display: none;">
+            <span id="adding-count" style="margin-right: 15px; font-weight: bold;">Selected</span>
+            <button id="btn-finish-adding" style="background: white; border: none; color: #007bff; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                DONE
+            </button>
         </div>
 
         <div id="legend" class="legend">
             <button id="minimize-legend" title="Minimize Legend">-</button>
-            <div class="legend-content">
+            <div class="legend-content" data-simplebar>
                 <b>LEGEND</b>
                 <div class="layer-group">
                     <label class="group-label">
@@ -136,7 +173,6 @@
                         </label>
                         <div id="BCItemsContainer" class="layer-list"></div>
                     </div>
-
             </div>
         </div>
 
@@ -145,5 +181,6 @@
         <script src="rmis.js"></script> 
         <script src="rmis2.js"></script>
         <script src="rmis3.js"></script>
+        <script src="rmis4.js"></script>
     </body>
 </html>
