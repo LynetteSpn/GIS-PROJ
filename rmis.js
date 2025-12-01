@@ -48,7 +48,6 @@ satelliteLayer.getSource().on('tileloaderror', () => {
   }));
 });
 
-
 const baseGroup = new ol.layer.Group({
     layers: [satelliteLayer,labelsLayer, regularLayer]
 });
@@ -102,8 +101,6 @@ const roadColors = {
     'FEDERAL': 'purple'
 };
 
-
-
 // --- Highlight Style (Used for WFS-on-Demand result) ---
 function highlightRoadStyle(feature) {
     // This style expects the feature to be a full vector feature fetched via WFS
@@ -119,8 +116,9 @@ function highlightRoadStyle(feature) {
                 font: 'bold 10px Calibri,sans-serif',
                 fill: new ol.style.Fill({ color: '#000' }),
                 stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
-                overflow: true,
-                placement: 'line'
+                overflow: false,
+                placement: 'line',
+                minZoom: 14
             })
         }),
         new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(0, 255, 242, 0.8)', width: 8 }) })
@@ -135,15 +133,12 @@ function districtFilterStyle(feature) {
     if (districtCode === currentDistrict) {
         style.setFill(new ol.style.Fill({ color: 'rgba(255, 255, 0, 0.3)' }));
     }
-
     return style;
 }
-
 
 // =========================================================================
 // 3. OVERLAY LAYERS
 // =========================================================================
-
 // WMS ROAD LAYER (FAST VISUALIZATION - Now handles display at all zoom levels)
 const roadLayerSource = new ol.source.TileWMS({
     url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
@@ -197,6 +192,7 @@ const bridgeLayer = new ol.layer.Tile({
     opacity: 1,
     visible: false
 });
+
 bridgeLayer.set('name',"BridgeLayer");
 
 //bridges and culverts group
@@ -209,19 +205,20 @@ const bridgeCulvertGroup = new ol.layer.Group({
     visible:false
 });
 
-
 // CHAINAGE LAYER (WMS, controlled by legend)
 const chainageLayer = new ol.layer.Tile({
     source: new ol.source.TileWMS({
-        url: 'https://10.1.4.18/geoserver/chainage_bft/wms',
+        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
         params: {
-            'LAYERS': 'chainage_bft:gis_chainage_kku_202510280845', 
-            'TILED': true
+            'LAYERS': 'rmisv2db_prod:gis_chainage', 
+            'TILED': true,
+            'STYLES': 'chainage_point_style'
         },
         serverType: 'geoserver'
     }),
     opacity: 1,
-    visible: false
+    visible: false,
+    minZoom: 16
 });
 chainageLayer.set('name', 'ChainageLayer');
 
@@ -283,13 +280,12 @@ const routeMarkerLayer = new ol.layer.Vector({
     })
 });
 
-
 // =========================================================================
 // 4. MAP INITIALIZATION 
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, lmcRoadLayer, roadLayer, chainageLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer, highlightLayer],
+    layers: [baseGroup, lmcRoadLayer, roadLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer,chainageLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -510,57 +506,56 @@ async function fetchExtendedAttributes(roadId) {
     return null;
 }
 
+// async function getChainageRange(roadId) {
+//     // Layer name confirmed from your chainage WMS layer:
+//     const chainageTypeName = 'rmisv2db_prod:gis_chainage'; 
 
-async function getChainageRange(roadId) {
-    // Layer name confirmed from your chainage WMS layer:
-    const chainageTypeName = 'chainage_bft:gis_chainage_kku_202510280845'; 
+//     // Filter by the unique road ID field ('pkm_road_id')
+//     const cql = `"pkm_road_id"='${roadId}'`; 
 
-    // Filter by the unique road ID field ('pkm_road_id')
-    const cql = `"pkm_road_id"='${roadId}'`; 
+//     // Build the WFS request URL
+//     const url = (
+//         'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' + 
+//         'version=1.0.0&request=GetFeature&typeName=' + chainageTypeName + '&' +
+//         'outputFormat=application/json&srsName=EPSG:4326&' +
+//         'cql_filter=' + encodeURIComponent(cql) +
+//         '&propertyname=distance' + // Request ONLY the distance field
+//         '&maxFeatures=10000&sortBy=distance&_=' + Date.now()
+//     );
 
-    // Build the WFS request URL
-    const url = (
-        'https://10.1.4.18/geoserver/chainage_bft/ows?service=WFS&' + 
-        'version=1.0.0&request=GetFeature&typeName=' + chainageTypeName + '&' +
-        'outputFormat=application/json&srsName=EPSG:4326&' +
-        'cql_filter=' + encodeURIComponent(cql) +
-        '&propertyname=distance' + // Request ONLY the distance field
-        '&maxFeatures=10000&sortBy=distance&_=' + Date.now()
-    );
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Chainage WFS failed');
+//     try {
+//         const response = await fetch(url);
+//         if (!response.ok) throw new Error('Chainage WFS failed');
         
-        const data = await response.json();
-        // Use GeoJSON format reader to parse features
-        const features = new ol.format.GeoJSON().readFeatures(data);
+//         const data = await response.json();
+//         // Use GeoJSON format reader to parse features
+//         const features = new ol.format.GeoJSON().readFeatures(data);
         
-        if (features && features.length > 0) {
-            let minChainage = Infinity;
-            let maxChainage = -Infinity;
+//         if (features && features.length > 0) {
+//             let minChainage = Infinity;
+//             let maxChainage = -Infinity;
             
-            features.forEach(f => {
-                // Read the 'distance' property
-                const val = parseFloat(f.get('distance')); 
-                if (!isNaN(val)) {
-                    if (val < minChainage) minChainage = val;
-                    if (val > maxChainage) maxChainage = val;
-                }
-            });
+//             features.forEach(f => {
+//                 // Read the 'distance' property
+//                 const val = parseFloat(f.get('distance')); 
+//                 if (!isNaN(val)) {
+//                     if (val < minChainage) minChainage = val;
+//                     if (val > maxChainage) maxChainage = val;
+//                 }
+//             });
 
-            return {
-                start: minChainage !== Infinity ? minChainage : null,
-                end: maxChainage !== -Infinity ? maxChainage : null
-            };
-        }
-        return { start: null, end: null };
+//             return {
+//                 start: minChainage !== Infinity ? minChainage : null,
+//                 end: maxChainage !== -Infinity ? maxChainage : null
+//             };
+//         }
+//         return { start: null, end: null };
         
-    } catch (error) {
-        console.error("Error fetching chainage distance data:", error);
-        return { start: null, end: null };
-    }
-}
+//     } catch (error) {
+//         console.error("Error fetching chainage distance data:", error);
+//         return { start: null, end: null };
+//     }
+// }
 
 // =========================================================================
 // 6. ROAD SEARCH & AUTOSUGGEST LOGIC (WFS-on-Demand Re-enabled)
@@ -574,7 +569,6 @@ function filterBy(fieldName) {
     roadSearchInput.value = "";
     document.getElementById("autocomplete-list").innerHTML = "";
 }
-
 
 const roadSearchInput = document.getElementById("roadSearch");
 const autocompleteList = document.getElementById("autocomplete-list");
@@ -805,7 +799,6 @@ document.getElementById("resetButton").addEventListener("click", function () {
     const filterBy = document.getElementById("filterBy");
     filterBy.value = "";
     filterBy.dispatchEvent(new Event('change'));
-
 });
 
 // =========================================================================
@@ -823,8 +816,6 @@ centerBtn.addEventListener('click', function () {
     map.getView().setCenter(ol.proj.fromLonLat([117.04304, 5.21470]));
     map.getView().setZoom(8);
 });
-
-
 
 // =========================================================================
 // 8. ROAD FILTER (WMS cql_filter)
@@ -876,7 +867,6 @@ function updateLmcRoadFilter() {
 // Clear highlight and search results after filter change
 highlightLayer.getSource().clear();
 document.getElementById("autocomplete-list").innerHTML = "";
-
 //=========================================================================
 // DISTRICT FILTER
 //=========================================================================
@@ -915,7 +905,6 @@ document.getElementById("districtFilter").addEventListener("change", function (e
         console.warn(`District '${selectedDistrictName}' not found in districtLayer.`);
     }
 });
-
 
 // =========================================================================
 // 9. LEGEND BUILDER & TOGGLE LOGIC
@@ -1268,7 +1257,6 @@ if (BCCheckbox) {
     });
 }
 
-
 // --- Chainage control ---
 if (chainageCheckbox) {
   chainageCheckbox.addEventListener('change', function () {
@@ -1311,18 +1299,80 @@ if(lmcRoadCheckbox){
 
 // 9B. Legend toggle logic
 const legendToggleBtn = document.getElementById("minimize-legend");
+const legendMobileToggleBtn = document.getElementById("legend-toggle-btn");
 
+// Desktop legend toggle (minimize/maximize)
 let isLegendMinimized = true;
-legendToggleBtn.addEventListener("click", function () {
-    isLegendMinimized = !isLegendMinimized;
-    legendDiv.classList.toggle("minimized", isLegendMinimized);
+legendToggleBtn.addEventListener("click", function (e) {
+    // Only work as minimize/maximize on desktop
+    if (window.innerWidth > 500) {
+        isLegendMinimized = !isLegendMinimized;
+        legendDiv.classList.toggle("minimized", isLegendMinimized);
 
-    legendToggleBtn.textContent = isLegendMinimized ? "+" : "-";
-    legendToggleBtn.title = isLegendMinimized ? "Maximize Legend" : "Minimize Legend";
+        legendToggleBtn.textContent = isLegendMinimized ? "+" : "-";
+        legendToggleBtn.title = isLegendMinimized ? "Maximize Legend" : "Minimize Legend";
+    } else {
+        // On mobile, close button behavior
+        e.preventDefault();
+        legendDiv.classList.remove('mobile-active');
+        if (legendMobileToggleBtn) {
+
+            
+            legendMobileToggleBtn.classList.remove('active');
+        }
+    }
 });
 
-// Initial state
-legendDiv.classList.add("minimized");
-legendToggleBtn.textContent = "+";
-legendToggleBtn.title = "Maximize Legend";
+// Mobile legend toggle button (show/hide)
+if (legendMobileToggleBtn) {
+    legendMobileToggleBtn.addEventListener('click', function(e) {
+        // Prevent any parent clicks
+        e.stopPropagation(); 
 
+        if (window.innerWidth <= 500) {
+            // Toggle the class that CSS uses to show/hide
+            legendDiv.classList.toggle('mobile-active');
+            
+            // Toggle visual state of the button (e.g. make it darker)
+            this.classList.toggle('active');
+            
+            // Force remove 'minimized' just in case desktop logic interfered
+            legendDiv.classList.remove('minimized');
+        }
+    });
+}
+
+// Close legend when clicking map on mobile (Better UX)
+map.on('click', function() {
+    if (window.innerWidth <= 500 && legendDiv.classList.contains('mobile-active')) {
+        legendDiv.classList.remove('mobile-active');
+        if (legendMobileToggleBtn) {
+            legendMobileToggleBtn.classList.remove('active');
+        }
+    }
+});
+
+// Initial state for desktop
+if (window.innerWidth > 500) {
+    legendDiv.classList.add("minimized");
+    legendToggleBtn.textContent = "+";
+    legendToggleBtn.title = "Maximize Legend";
+}
+
+// Handle window resize to maintain proper state
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 500) {
+        // Desktop mode - remove mobile classes
+        legendDiv.classList.remove('mobile-active');
+        if (legendMobileToggleBtn) {
+            legendMobileToggleBtn.classList.remove('active');
+        }
+        // Restore desktop minimize state if needed
+        if (isLegendMinimized && !legendDiv.classList.contains('minimized')) {
+            legendDiv.classList.add('minimized');
+        }
+    } else {
+        // Mobile mode - remove desktop minimize state
+        legendDiv.classList.remove('minimized');
+    }
+});
