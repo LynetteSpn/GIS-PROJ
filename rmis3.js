@@ -141,7 +141,7 @@ if (measureBtn) measureBtn.addEventListener('click', () => {
 async function getRoute(start, end) {
   routeSource.clear();
   // Change localhost to your IP if testing on mobile!
-  const apiUrl = `https://10.1.4.18:3000/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
+  const apiUrl = `http://10.1.4.18:3000/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
   try {
     const response = await fetch(apiUrl);
     const routeData = await response.json(); 
@@ -269,7 +269,7 @@ async function scanAssets(type) {
     try {
         showMessage(`Scanning for Critical ${type}s...`);
         
-        const response = await fetch(`https://10.1.4.18:3000/assets/critical?type=${type}`);
+        const response = await fetch(`http://10.1.4.18:3000/assets/critical?type=${type}`);
         const assets = await response.json();
         
         if (!assets || assets.length === 0) {
@@ -283,7 +283,7 @@ async function scanAssets(type) {
         routeMarkerSource.clear();
         routeSource.clear();
 
-        const limit = 20;
+        const limit = 50;
         const assetsToShow = assets.slice(0, limit);
 
         assetsToShow.forEach((asset) => {
