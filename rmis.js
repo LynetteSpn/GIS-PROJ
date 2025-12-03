@@ -293,6 +293,12 @@ const map = new ol.Map({
     })
 });
 
+map.on('moveend', function() {
+    if (dashboardPanel.style.display === 'block') {
+        updateDashboardCharts();
+    }
+});
+
 // =========================================================================
 // 5. BASEMAP SWITCH LOGIC
 // =========================================================================

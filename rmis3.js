@@ -1,3 +1,6 @@
+// === RMIS Unified Route/Optimization Logic ===
+// Single entry: plannerBtn. All legacy route-btn & optimize-btn code removed. Last update: 2025-12-02
+
 // =========================================================================
 // GLOBAL STATE VARIABLES
 // =========================================================================
@@ -12,38 +15,34 @@ let jobList = []; // Stores: [{lon, lat}, {lon, lat}...]
 let currentOptMode = 'manual'; //'manual,'bridge','culvert'
 
 // --- DOM ELEMENTS ---
-const routeBtn = document.getElementById('route-btn');
-const routeOptionsPanel = document.getElementById('route-options-panel');
-const btnRouteFromGps = document.getElementById('btn-route-from-gps');
-const btnRouteManual = document.getElementById('btn-route-manual');
-const routeBanner = document.getElementById('route-banner');
-
-// Optimization Elements
-const optimizeBtn = document.getElementById('optimize-btn');
+const plannerBtn = document.getElementById('planner-btn');
 const optimizePanel = document.getElementById('optimization-panel');
 const btnCloseOpt = document.getElementById('btn-close-opt');
 const btnBackMenu = document.getElementById('btn-back-menu');
 const optTitle = document.getElementById('opt-title');
 
-//Menu Views
+// Main Menu Choices
 const optMainMenu = document.getElementById('opt-main-menu');
 const optWorkspace = document.getElementById('opt-workspace');
-
-//Mode Buttons
-const btnModeManual = document.getElementById('btn-mode-manual');
+const btnModeGps = document.getElementById('btn-mode-gps');
+const btnModeManualStart = document.getElementById('btn-mode-manualstart');
+const btnModeMultiStop = document.getElementById('btn-mode-multistop');
 const btnModeBridge = document.getElementById('btn-mode-bridge');
 const btnModeCulvert = document.getElementById('btn-mode-culvert');
 
-//Workspace Buttons
+// Workspace Buttons
 const btnAddJobs = document.getElementById('btn-add-jobs');
 const btnRunTsp = document.getElementById('btn-run-tsp');
 const btnClearJobs = document.getElementById('btn-clear-jobs');
 const jobListDiv = document.getElementById('job-list');
 
-const btnScan = document.getElementById('btn-scan-critical');
+const addingModeBar = document.getElementById('adding-mode-bar');
+const addingCountSpan = document.getElementById('adding-count');
+const btnFinishAdding = document.getElementById('btn-finish-adding');
+const routeBanner = document.getElementById('route-banner');
 
 // =========================================================================
-// 1. MEASUREMENT TOOL CODE
+// 1. MEASUREMENT TOOL CODE (unchanged)
 // =========================================================================
 const measureSource = new ol.source.Vector();
 const measureLayer = new ol.layer.Vector({
@@ -116,7 +115,8 @@ function toggleMeasurement() {
     measureBtn.classList.toggle('active', isMeasuring);
 
     if (isMeasuring) {
-        closeAllTools(); // Close routing/optimization
+        closeAllTools(false);
+
         measureSource.clear(); 
         if (measureTooltipElement) {
             measureTooltipElement.style.display = 'block'; 
@@ -125,40 +125,97 @@ function toggleMeasurement() {
         addInteraction();
         map.getTargetElement().style.cursor = 'crosshair';
     } else {
-        map.removeInteraction(measureDraw);
+        if (measureDraw) map.removeInteraction(measureDraw);
+        if (measureTooltip) map.removeOverlay(measureTooltip);
+        measureSource.clear();
         map.getTargetElement().style.cursor = '';
+        measureBtn.classList.remove('active');
     }
 }
 
 if (measureBtn) measureBtn.addEventListener('click', () => {
-     if (!isMeasuring) { measureSource.clear(); if (measureTooltip) map.removeOverlay(measureTooltip); }
      toggleMeasurement();
 });
 
 // =========================================================================
-// 2. STANDARD ROUTING (Start -> End)
+// ROUTE TO POPUP FUNCTION
+// =========================================================================
+window.routeToPopupLocation = function(destLon, destLat) {
+    // 1. Check for Geolocation support
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by this browser.");
+        return;
+    }
+
+    // 2. Visual Feedback (Change cursor)
+    document.body.style.cursor = 'wait';
+    const originalText = document.querySelector('.popup-footer button[onclick*="routeToPopupLocation"]').innerHTML;
+    document.querySelector('.popup-footer button[onclick*="routeToPopupLocation"]').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
+
+    // 3. Get Current Position
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            document.body.style.cursor = 'default';
+            
+            // Define Start (My Location) and End (Popup Location)
+            const startNode = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude
+            };
+            
+            const endNode = {
+                lat: destLat,
+                lon: destLon
+            };
+
+            // 4. Update Global State (Optional, keeps your Unified Panel in sync)
+            if (typeof currentUserLocation !== 'undefined') currentUserLocation = startNode;
+            if (typeof startPoint !== 'undefined') startPoint = startNode;
+
+            // 5. Call your existing Routing Engine
+            // Assuming getRoute(start, end) exists from your previous code
+            if (typeof getRoute === 'function') {
+                getRoute(startNode, endNode);
+                
+                // Close the popup so the user can see the route
+                hideRoadInfo(); 
+            } else {
+                alert("Routing function (getRoute) is missing!");
+            }
+        },
+        (error) => {
+            document.body.style.cursor = 'default';
+            alert("Unable to retrieve your location. Check permissions.");
+            // Reset button text
+            document.querySelector('.popup-footer button[onclick*="routeToPopupLocation"]').innerHTML = originalText;
+        },
+        { enableHighAccuracy: true }
+    );
+};
+
+// =========================================================================
+// 2. STANDARD ROUTING (Single Start/End)
 // =========================================================================
 async function getRoute(start, end) {
-  routeSource.clear();
-  // Change localhost to your IP if testing on mobile!
-  const apiUrl = `http://10.1.4.18:3000/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
-  try {
-    const response = await fetch(apiUrl);
-    const routeData = await response.json(); 
+    routeSource.clear();
+    const apiUrl = `http://10.1.4.18:3000/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
+    try {
+        const response = await fetch(apiUrl);
+        const routeData = await response.json(); 
 
-    if (!routeData || !routeData.route_geometry) {
-      alert('No route found between these points.');
-      resetRouteWizard(); 
-      return;
-    }
-    drawRouteOnMap(routeData.route_geometry);
-    console.table(routeData.steps);
-  } catch (err) { console.error('Error fetching route:', err); }
+        if (!routeData || !routeData.route_geometry) {
+            alert('No route found between these points.');
+            resetRouteWizard(); 
+            return;
+        }
+        drawRouteOnMap(routeData.route_geometry);
+        console.table(routeData.steps);
+    } catch (err) { console.error('Error fetching route:', err); }
 }
 
 function drawRouteOnMap(geojson) {
     const routeFeature = new ol.format.GeoJSON().readFeature(geojson, {
-      dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' 
+        dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' 
     });
     routeSource.addFeature(routeFeature);
     map.getView().fit(routeFeature.getGeometry().getExtent(), { padding: [50, 50, 50, 50], duration: 1000 });
@@ -167,19 +224,11 @@ function drawRouteOnMap(geojson) {
 // =========================================================================
 // 3. OPTIMIZATION MODULE (Multiple Points)
 // =========================================================================
-const addingModeBar = document.getElementById('adding-mode-bar');
-const addingCountSpan = document.getElementById('adding-count');
-const btnFinishAdding = document.getElementById('btn-finish-adding');
-
-//PANEL NAVIGATION LOGIC
 function showMainMenu() {
-    // Reset State
     jobList = [];
     routeMarkerSource.clear();
     routeSource.clear();
     if(isAddingJobs) toggleAddJobsMode(); // Stop adding if active
-
-    // UI Switch
     optMainMenu.style.display = 'block';
     optWorkspace.style.display = 'none';
     btnBackMenu.style.display = 'none';
@@ -188,45 +237,33 @@ function showMainMenu() {
 
 async function startMode(mode) {
     currentOptMode = mode;
-    // UI Switch
     optMainMenu.style.display = 'none';
-    optWorkspace.style.display = 'flex'; // Show workspace
-    btnBackMenu.style.display = 'block'; // Show back button
+    optWorkspace.style.display = 'flex';
+    btnBackMenu.style.display = 'block';
 
-    // Customize based on mode
     if (mode === 'manual') {
         optTitle.innerText = "Manual Planner";
-        btnAddJobs.style.display = 'flex'; // Show "Add" button
-        renderJobList(); // Show empty list
+        btnAddJobs.style.display = 'flex';
+        renderJobList();
     } 
     else if (mode === 'bridge') {
         optTitle.innerText = "Bridge Repair";
-        btnAddJobs.style.display = 'none'; // Hide manual add
-        await scanAssets('bridge'); // Auto Scan
+        btnAddJobs.style.display = 'none';
+        await scanAssets('bridge');
     } 
     else if (mode === 'culvert') {
         optTitle.innerText = "Culvert Repair";
-        btnAddJobs.style.display = 'none'; // Hide manual add
-        await scanAssets('culvert'); // Auto Scan
+        btnAddJobs.style.display = 'none';
+        await scanAssets('culvert');
     }
 }
 
-// =========================================================================
-// FLOATING BAR LOGIC (The "Done" Button System)
-// =========================================================================
 function enterFloatingMode(manualAdd = false) {
-    // 1. Hide the main panel
     if (optimizePanel) optimizePanel.style.display = 'none';
-    
-    // 2. Show the floating "Done" bar
     if (addingModeBar) addingModeBar.style.display = 'flex';
-    
-    // 3. Set global state
     isAddingJobs = manualAdd; 
     
-    // 4. Set Cursor & Message based on mode
     if (manualAdd) {
-        // Manual Mode: Plus cursor, clicking adds points
         map.getTargetElement().style.cursor = 'copy'; 
         showMessage("Tap map to add stops");
         if (btnAddJobs) {
@@ -234,7 +271,6 @@ function enterFloatingMode(manualAdd = false) {
             btnAddJobs.classList.add("active");
         }
     } else {
-        // Scan Mode: Normal cursor, clicking selects points
         map.getTargetElement().style.cursor = ''; 
         showMessage("Tap dots to Select (Blue) / Unselect (Red)");
     }
@@ -242,43 +278,28 @@ function enterFloatingMode(manualAdd = false) {
 }
 
 function exitFloatingMode() {
-    // 1. Show the main panel
     if (optimizePanel) optimizePanel.style.display = 'block';
-    
-    // 2. Hide the floating bar
     if (addingModeBar) addingModeBar.style.display = 'none';
-    
-    // 3. Reset state
     isAddingJobs = false;
     map.getTargetElement().style.cursor = '';
     showMessage(null);
-    
-    // 4. Reset button UI
     if (btnAddJobs) {
         btnAddJobs.innerText = "+ Add Locations";
         btnAddJobs.classList.remove("active");
     }
-    
-    // 5. Refresh the list
     renderJobList();
 }
 
-
-//ASSET SCANNER (UPDATED FOR TYPE)
 async function scanAssets(type) {
     try {
         showMessage(`Scanning for Critical ${type}s...`);
-        
         const response = await fetch(`http://10.1.4.18:3000/assets/critical?type=${type}`);
         const assets = await response.json();
-        
         if (!assets || assets.length === 0) {
             alert(`No critical ${type}s found.`);
             showMessage(null);
             return;
         }
-
-        // Reset
         jobList = [];
         routeMarkerSource.clear();
         routeSource.clear();
@@ -288,45 +309,34 @@ async function scanAssets(type) {
 
         assetsToShow.forEach((asset) => {
             if (asset.lon === null || asset.lat === null) return;
-            // Add as Critical (Red)
             addJobPoint(asset.lon, asset.lat, true, asset.name); 
         });
         
-        // Zoom to results
         const extent = routeMarkerSource.getExtent();
         if (!ol.extent.isEmpty(extent)) {
             map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 1000 });
         }
-
-        // === NEW: Auto-Hide Panel so user can interact with map ===
         optimizePanel.style.display = 'none'; 
-        optimizeBtn.classList.remove('active');
-        
-        // Show helpful banner
         showMessage(`Found ${assets.length} assets. Tap dots to Select (Blue), then open menu to Optimize.`);
-
         enterFloatingMode();
-
     } catch (err) {
         console.error(err);
         alert("Scan failed. Check server.");
     }
 }
 
-// A. Add a point to the job list
+// Job Points Add/Update UI
 function addJobPoint(lon, lat, isCritical = false, name = 'Manual Location') {
     if (jobList.length >= 50) {
         alert("Max 50 jobs allowed.");
         return;
     }
-
     jobList.push({ 
         lon: lon, 
         lat: lat, 
         selected: !isCritical, // Manual = Blue(Selected), Critical = Red(Unselected)
         name: name 
     });
-    
     updateMapMarkers();
     renderJobList();
 }
@@ -336,22 +346,18 @@ function updateAddingCount() {
         addingCountSpan.innerText = `${jobList.length} Location${jobList.length !== 1 ? 's' : ''}`;
     }
 }
-//done button in adding mode bar event listener
 
 if (btnFinishAdding){
     btnFinishAdding.addEventListener('click', exitFloatingMode);
 }
 
-// B. Render the HTML list in the panel
 function renderJobList() {
     if (jobList.length === 0) {
         jobListDiv.innerHTML = '<div style="color:#999;text-align:center;margin-top:20px;">No jobs added.<br>Select a mode to begin.</div>';
         return;
     }
-
     let html = '';
     jobList.forEach((job, index) => {
-        // Logic to style list item based on selection
         const isOptimized = job.name.startsWith("Stop #");
         const color = isOptimized ? '#28a745' : '#007bff'; 
         const border = job.selected ? `4px solid ${color}` : '4px solid transparent';
@@ -372,46 +378,27 @@ function renderJobList() {
 function highlightJobOnMap(index) {
     const job = jobList[index];
     if (!job) return;
-
     const coords = ol.proj.fromLonLat([job.lon, job.lat]);
-
-    // 1. Animate the Map View (Zoom In)
-    map.getView().animate({
-        center: coords,
-        zoom: 18, // Close up view
-        duration: 1000 // 1 second smooth pan
-    });
-
-    // 2. Find the marker feature
+    map.getView().animate({ center: coords, zoom: 18, duration: 1000 });
     const features = routeMarkerSource.getFeatures();
-    // We stored the 'index' in the feature earlier, so we find the match
     const feature = features.find(f => f.get('index') === index);
-
     if (feature) {
-        // 3. "Flash" Effect
-        // We temporarily make it huge, then shrink it back
         const originalStyle = feature.getStyle();
-        
-        // Create a temporary "Big" style
         const flashStyle = new ol.style.Style({
             image: new ol.style.Circle({
-                radius: 20, // Huge radius
-                fill: new ol.style.Fill({ color: 'rgba(255, 215, 0, 0.7)' }), // Gold color
+                radius: 20,
+                fill: new ol.style.Fill({ color: 'rgba(255, 215, 0, 0.7)' }),
                 stroke: new ol.style.Stroke({ color: 'white', width: 3 })
             }),
-            text: originalStyle.getText() // Keep the number
+            text: originalStyle.getText()
         });
-
         feature.setStyle(flashStyle);
-
-        // Reset after 500ms (0.5 seconds)
         setTimeout(() => {
             feature.setStyle(originalStyle);
         }, 500);
     }
 }
 
-//zooms to specific job and visualize it
 function updateMapMarkers() {
     routeMarkerSource.clear();
     jobList.forEach((job, index) => {
@@ -421,7 +408,6 @@ function updateMapMarkers() {
         });
         const color = job.selected ? '#007bff' : '#d62222';
         const radius = job.selected ? 9 : 7;
-        
         marker.setStyle(new ol.style.Style({
             image: new ol.style.Circle({ radius: radius, fill: new ol.style.Fill({ color: color }), stroke: new ol.style.Stroke({ color: 'white', width: 2 }) }),
             text: new ol.style.Text({ text: (index + 1).toString(), offsetY: 1, font: 'bold 11px Arial', fill: new ol.style.Fill({ color: 'white' }) })
@@ -451,18 +437,16 @@ async function runOptimization() {
     try {
         const response = await fetch(apiUrl);
         const data = await response.json();
-
         if (!data || !data.route_geometry) {
             alert("Optimization failed.");
         } else {
             handleSuccess(data);
         }
-        
     } catch (err) {
         console.error(err);
         alert("Server Error.");
     } finally {
-        btnRunTsp.innerText = "⚡ Optimize Route";
+        btnRunTsp.innerText = "Optimize Route";
         btnRunTsp.disabled = false;
         if (isAddingJobs) toggleAddJobsMode();
     }
@@ -471,179 +455,40 @@ async function runOptimization() {
 function handleSuccess(data) {
     routeSource.clear();
     drawRouteOnMap(data.route_geometry);
-    // Re-order list based on server response
     jobList = data.stops.map(stop => ({
         lon: stop.lon,
         lat: stop.lat,
-        name: `Stop #${stop.seq}`, 
+        name: `Stop #${stop.seq}`,
         selected: true
     }));
-    
     updateMapMarkers();
     renderJobList();
-   optimizePanel.style.display = 'none';
-    optimizeBtn.classList.remove('active');
-    
+    optimizePanel.style.display = 'none';
     showMessage("Route Optimized! Open panel to review stops.");
 }
 
 function toggleAddJobsMode() {
-    isAddingJobs = manualAdd;
     if (isAddingJobs) {
-        // === ENTERING ADD MODE ===
-        // 1. Hide the Big Panel so user can see the map
         optimizePanel.style.display = 'none';
-        
-        // 2. Show the Small "Done" Bar
         if (addingModeBar) {
             addingModeBar.style.display = 'flex';
-            updateAddingCount(); // Update the "0 Selected" text
+            updateAddingCount();
         }
-        
-        // 3. Change Cursor / Banner
-        map.getTargetElement().style.cursor = 'copy'; // Plus cursor
+        map.getTargetElement().style.cursor = 'copy';
         showMessage("Tap on map to add stops");
-        
-        // 4. Visual state for the button (in case panel re-opens)
         btnAddJobs.innerText = "Stop Adding";
         btnAddJobs.classList.add("active");
 
     } else {
-        // === EXITING ADD MODE (Clicked Done) ===
-        // 1. Hide the Small Bar
         if (addingModeBar) addingModeBar.style.display = 'none';
-        
-        // 2. Show the Big Panel again so user can Optimize
         optimizePanel.style.display = 'block';
-        
-        // 3. Reset Cursor
         map.getTargetElement().style.cursor = '';
         showMessage(null);
-        
-        // 4. Reset button state
         btnAddJobs.innerText = "+ Add Locations";
         btnAddJobs.classList.remove("active");
-        
-        // 5. Refresh list
         renderJobList();
     }
 }
-
-// =========================================================================
-// 3b. ASSET SCANNER (The Button Logic) 
-// =========================================================================
-async function scanCriticalAssets() {
-    try {
-        showMessage("Scanning database for 'Poor' conditions...");
-        
-        // 1. Call the API
-        const response = await fetch('https://10.1.4.18:3000/assets/critical');
-        const assets = await response.json();
-        
-        if (!assets || assets.length === 0) {
-            alert("Great news! No critical assets found.");
-            showMessage(null);
-            return;
-        }
-
-        // 2. Reset everything to clean state
-        jobList = [];
-        routeMarkerSource.clear();
-        routeSource.clear();
-
-        // 3. Limit items
-        const limit = 20;
-        const assetsToShow = assets.slice(0, limit);
-
-        // 4. Add them using our helper
-        assetsToShow.forEach((asset) => {
-            if(asset.lon === null || asset.lat === null) return;
-
-            addJobPoint(asset.lon, asset.lat, true, asset.name); // True = Critical (Red)
-        });
-        
-        // Zoom to show all red dots
-        const extent = routeMarkerSource.getExtent();
-        map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 1000 });
-
-        showMessage(`Found ${assets.length} critical assets. Click 'Optimize' to route.`);
-        
-        if (assets.length > limit) {
-            alert(`Found ${assets.length} assets. Showing top ${limit} to avoid lag.`);
-        }
-
-    } catch (err) {
-        console.error(err);
-        alert("Failed to scan assets. Is server.js running?");
-    }
-}
-
-// 1. MAIN OPTIMIZE BUTTON (Toggle Panel with Memory)
-if (optimizeBtn) {
-    optimizeBtn.addEventListener('click', () => {
-        const isVisible = optimizePanel.style.display === 'block';
-        
-        // If panel is already open, just close it (toggle behavior)
-        if (isVisible) {
-            closeAllTools();
-            return;
-        }
-
-        // If panel is closed, we want to OPEN it.
-        // First, close conflicting tools (like Measure)
-        if (isMeasuring) toggleMeasurement();
-        // Note: We DON'T call resetRouteWizard() here because we want to keep the data!
-        
-        // Show the panel container
-        optimizePanel.style.display = 'block';
-        optimizeBtn.classList.add('active');
-
-        // === INTELLIGENT VIEW SWITCHER ===
-        if (jobList.length > 0) {
-            // SCENARIO A: We have data (a route exists). Go straight to WORKSPACE.
-            optMainMenu.style.display = 'none';
-            optWorkspace.style.display = 'flex';
-            btnBackMenu.style.display = 'block';
-            
-            // Restore correct title based on mode
-            if (currentOptMode === 'manual') optTitle.innerText = "Manual Planner";
-            else if (currentOptMode === 'bridge') optTitle.innerText = "Bridge Repair";
-            else if (currentOptMode === 'culvert') optTitle.innerText = "Culvert Repair";
-            
-            // Ensure list is rendered
-            renderJobList(); 
-        } else {
-            // SCENARIO B: New session. Go to MAIN MENU.
-            showMainMenu(); 
-        }
-    });
-}
-
-// Menu Buttons
-if (btnModeManual) btnModeManual.addEventListener('click', () => startMode('manual'));
-if (btnModeBridge) btnModeBridge.addEventListener('click', () => startMode('bridge'));
-if (btnModeCulvert) btnModeCulvert.addEventListener('click', () => startMode('culvert'));
-
-// Back Button
-if (btnBackMenu) btnBackMenu.addEventListener('click', () => {
-    // Clear current work when going back? Or keep it? 
-    // Usually better to clear to avoid confusion.
-    jobList = [];
-    routeMarkerSource.clear();
-    routeSource.clear();
-    showMainMenu();
-});
-
-// Workspace Buttons
-if (btnAddJobs) btnAddJobs.addEventListener('click', () => enterFloatingMode(true));
-if (btnRunTsp) btnRunTsp.addEventListener('click', runOptimization);
-if (btnClearJobs) btnClearJobs.addEventListener('click', () => {
-    jobList = [];
-    routeMarkerSource.clear();
-    routeSource.clear();
-    renderJobList();
-});
-if (btnCloseOpt) btnCloseOpt.addEventListener('click', closeAllTools);
 
 // =========================================================================
 // 4. UI HELPERS
@@ -679,121 +524,105 @@ function resetRouteWizard() {
     routeWizardState = 'idle';
     showMessage(null); 
     map.getTargetElement().style.cursor = '';
-    routeBtn.classList.remove('active');
-    if (routeOptionsPanel) routeOptionsPanel.style.display = 'none';
 }
 
 // A Helper to close ALL panels/modes to avoid conflicts
-function closeAllTools() {
-    // 1. Close Measurement
-    if (isMeasuring) toggleMeasurement();
-    // 2. Close Standard Routing
+function closeAllTools(includeMeasure = true) {
+
+    if (includeMeasure && isMeasuring){
+        toggleMeasurement();
+        return;
+    } 
+
     resetRouteWizard();
-    // 3. Close Optimization
+
     if (optimizePanel) optimizePanel.style.display = 'none';
-    if (optimizeBtn) optimizeBtn.classList.remove('active');
     isAddingJobs = false;
+
     if (btnAddJobs) {
         btnAddJobs.innerText = "+ Add Locations";
         btnAddJobs.classList.remove("active");
     }
 }
 
-function getGpsForRouting() {
-    if ('geolocation' in navigator) {
-        showMessage("Finding your location...");
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const { longitude, latitude } = pos.coords;
-                // Clear everything first
-                closeAllTools();
-                
-                currentUserLocation = { lon: longitude, lat: latitude }; 
-                startPoint = currentUserLocation; 
-                
-                // Activate Routing State manually
-                routeWizardState = 'selectDest';
-                routeBtn.classList.add('active');
-                
-                const mapCoords = ol.proj.fromLonLat([startPoint.lon, startPoint.lat]);
-                addMarker(mapCoords, 'Start'); 
-                showMessage("Click on map to set DESTINATION");
-                map.getTargetElement().style.cursor = 'crosshair';
-
-                map.getView().animate({ center: mapCoords, zoom: 16, duration: 1000 });
-            },
-            (err) => { alert('GPS Error.'); resetRouteWizard(); },
-            { enableHighAccuracy: true }
-        );
-    } else { alert('Geolocation not supported.'); }
-}
-
 // =========================================================================
-// 5. LISTENERS FOR STANDARD ROUTING
+// 5. Route Planner Entry & Menu
 // =========================================================================
-if (routeBtn) {
-    routeBtn.addEventListener('click', () => {
-        const isVisible = routeOptionsPanel && routeOptionsPanel.style.display === 'block';
-        closeAllTools(); // Reset everything
-        
-        if (!isVisible) {
-            if (routeOptionsPanel) routeOptionsPanel.style.display = 'block';
-            routeBtn.classList.add('active');
-        }
+
+// Main entry point, replaces both route and optimize buttons!
+if (plannerBtn) {
+    plannerBtn.addEventListener('click', () => {
+        closeAllTools();
+        optimizePanel.style.display = 'block';
+        showMainMenu();
     });
 }
 
-if (btnRouteFromGps) btnRouteFromGps.addEventListener('click', getGpsForRouting);
-
-if (btnRouteManual) {
-    btnRouteManual.addEventListener('click', () => {
-        closeAllTools();
-        if (routeOptionsPanel) routeOptionsPanel.style.display = 'none'; // Hide panel, start wizard
-        routeBtn.classList.add('active');
-        
+// Option Handlers
+if(btnModeGps) {
+    btnModeGps.addEventListener('click', () => {
+        optimizePanel.style.display = 'none';
+        getGpsForRouting();
+    });
+}
+if(btnModeManualStart) {
+    btnModeManualStart.addEventListener('click', () => {
+        optimizePanel.style.display = 'none';
         routeWizardState = 'selectStart';
         showMessage("Click on map to set START point");
         map.getTargetElement().style.cursor = 'crosshair';
     });
 }
+if(btnModeMultiStop) {
+    btnModeMultiStop.addEventListener('click', () => startMode('manual'));
+}
+if(btnModeBridge) {
+    btnModeBridge.addEventListener('click', () => startMode('bridge'));
+}
+if(btnModeCulvert) {
+    btnModeCulvert.addEventListener('click', () => startMode('culvert'));
+}
+
+// Back/Workspace/Close handlers
+if (btnBackMenu) btnBackMenu.addEventListener('click', () => {
+    jobList = [];
+    routeMarkerSource.clear();
+    routeSource.clear();
+    showMainMenu();
+});
+if (btnAddJobs) btnAddJobs.addEventListener('click', () => enterFloatingMode(true));
+if (btnRunTsp) btnRunTsp.addEventListener('click', runOptimization);
+if (btnClearJobs) btnClearJobs.addEventListener('click', () => {
+    jobList = [];
+    routeMarkerSource.clear();
+    routeSource.clear();
+    renderJobList();
+});
+if (btnCloseOpt) btnCloseOpt.addEventListener('click', closeAllTools);
 
 // =========================================================================
 // 6. MASTER CLICK HANDLER
 // =========================================================================
 map.on('click', function(evt) {
-    
-    // 1. Measure Check
     if (isMeasuring) return;
+    const feature = map.forEachFeatureAtPixel(evt.pixel, function(feat) { return feat; });
 
-    const feature = map.forEachFeatureAtPixel(evt.pixel, function(feat) {
-        return feat;
-    });
-
-    // If we clicked a job marker 
     if (feature && feature.get('index') !== undefined) {
         const idx = feature.get('index');
-        
-        // Toggle selection
         jobList[idx].selected = !jobList[idx].selected;
-        
-        // Redraw to show color change
         updateMapMarkers();
-        renderJobList(); // Update checkbox in list
+        renderJobList();
         return; 
     }
 
-    // 2. Job Planner (Adding New Points on empty space)
     if (isAddingJobs) {
         const coords = ol.proj.toLonLat(evt.coordinate);
-        // Manual adds are selected (Blue) by default
         addJobPoint(coords[0], coords[1], false, "Manual Selection"); 
         return;
     }
 
-    // Priority 3: Standard Routing Wizard
     switch (routeWizardState) {
         case 'idle':
-            // No tool active -> Show Info Popup
             handleRoadInfoClick(evt);
             break;
 
@@ -811,11 +640,33 @@ map.on('click', function(evt) {
             addMarker(evt.coordinate, 'End');
             showMessage(null);
             getRoute(startPoint, endPoint);
-            
-            // Reset
-            routeWizardState = 'idle'; 
+            routeWizardState = 'idle';
             map.getTargetElement().style.cursor = '';
-            routeBtn.classList.remove('active'); 
             break;
     }
 });
+
+// =========================================================================
+// 7. GPS Routing Logic (no legacy button needed)
+// =========================================================================
+function getGpsForRouting() {
+    if ('geolocation' in navigator) {
+        showMessage("Finding your location...");
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const { longitude, latitude } = pos.coords;
+                closeAllTools();
+                currentUserLocation = { lon: longitude, lat: latitude}; 
+                startPoint = currentUserLocation; 
+                routeWizardState = 'selectDest';
+                const mapCoords = ol.proj.fromLonLat([startPoint.lon, startPoint.lat]);
+                addMarker(mapCoords, 'Start'); 
+                showMessage("Click on map to set DESTINATION");
+                map.getTargetElement().style.cursor = 'crosshair';
+                map.getView().animate({ center: mapCoords, zoom: 16, duration: 1000 });
+            },
+            (err) => { alert('GPS Error.'); resetRouteWizard(); },
+            { enableHighAccuracy: true }
+        );
+    } else { alert('Geolocation not supported.'); }
+}

@@ -1,337 +1,192 @@
-// Advanced Hover Analytics (District Stats) - improved version
-// - safer WFS handling
-// - chunking of large OR filters
-// - XML escaping
-// - improved fallbacks for counts
+const dashboardPanel = document.getElementById('dashboard-panel');
+const dashboardOpenBtn = document.getElementById('chart-btn');
+const dashboardCloseBtn = document.getElementById('dashboard-close-btn');
 
-// 1. SETUP TOOLTIP UI (Create the box)
-const hoverTooltipElement = document.createElement('div');
-hoverTooltipElement.className = 'ol-tooltip-hover';
-hoverTooltipElement.style.position = 'absolute';
-hoverTooltipElement.style.background = 'rgba(0, 0, 0, 0.85)';
-hoverTooltipElement.style.color = 'white';
-hoverTooltipElement.style.padding = '8px 12px';
-hoverTooltipElement.style.borderRadius = '6px';
-hoverTooltipElement.style.pointerEvents = 'none';
-hoverTooltipElement.style.fontSize = '12px';
-hoverTooltipElement.style.zIndex = '9999';
-hoverTooltipElement.style.whiteSpace = 'nowrap';
-hoverTooltipElement.style.display = 'none';
-hoverTooltipElement.style.maxWidth = '320px';
-hoverTooltipElement.style.overflow = 'hidden';
-hoverTooltipElement.style.textOverflow = 'ellipsis';
-document.body.appendChild(hoverTooltipElement);
+dashboardOpenBtn.onclick = function() {
+    dashboardPanel.style.display = 'block';
+    updateDashboardCharts();
 
-// 2. ADD OVERLAY TO MAP
-const hoverOverlay = new ol.Overlay({
-    element: hoverTooltipElement,
-    offset: [15, 0],
-    positioning: 'center-left'
-});
-map.addOverlay(hoverOverlay);
-
-// District name -> code map
-const districtNameMap = {
-    "Tuaran": "04",
-    "Ranau": "06",
-    "Kota Belud": "03",
-    "Sandakan": "07",
-    "Kinabatangan": "09",
-    "Beluran": "08",
-    "Tongod": "25",
-    "Telupid": "28",
-    "Tawau": "10",
-    "Lahad Datu": "11",
-    "Kunak": "24",
-    "Semporna": "12",
-    "Keningau": "13",
-    "Nabawan": "15",
-    "Tambunan": "14",
-    "Tenom": "16",
-    "Beaufort": "17",
-    "Kuala Penyu": "18",
-    "Sipitang": "19",
-    "Kota Marudu": "22",
-    "Kudat": "05",
-    "Pitas": "23",
-    "Kota Kinabalu": "01",
-    "Papar": "02",
-    "Penampang": "21",
-    "Putatan": "27"
+    if(window.innerWidth <= 850){
+        toolbar.classList.add('active-chart');
+    }
 };
 
-let isMapLoaded = true;
-console.log("✅ District Mapping Loaded (Static Mode)");
-
-// Simple cache: { [districtName]: stats }
-const districtStatsCache = {}; // consider adding TTL/invalidation if underlying data changes
-
-// Helper: escape XML special chars for literals
-function escapeXml(str) {
-    if (str == null) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;');
-}
-
-// Helper: coerce GeoServer/WFS count
-function extractFeatureCount(json) {
-    // GeoServer WFS can return numberOfFeatures, totalFeatures (string or number),
-    // or if returned features array, use its length.
-    if (!json) return 0;
-    if (typeof json.numberOfFeatures !== 'undefined') {
-        return Number(json.numberOfFeatures) || 0;
+dashboardCloseBtn.onclick = function() {
+    dashboardPanel.style.display = 'none';
+    dashboardOpenBtn.style.display = 'block';
+     if (window.innerWidth <= 850) {
+        toolbar.classList.remove('active-chart');
     }
-    if (typeof json.totalFeatures !== 'undefined') {
-        // totalFeatures sometimes is a string like "123"
-        const n = Number(json.totalFeatures);
-        return Number.isNaN(n) ? 0 : n;
-    }
-    if (Array.isArray(json.features)) {
-        return json.features.length;
-    }
-    // fallback for other shapes
-    return 0;
-}
+};
 
-async function getDistrictStatsDeep(districtName) {
-    // Normalize districtName
-    const name = (districtName || '').trim();
-    if (!name) return null;
+let assetChart, typeChart;
 
-    if (districtStatsCache[name]) return districtStatsCache[name];
 
-    const dCode = districtNameMap[name];
-    if (!dCode) {
-        console.warn(`⚠️ No district code mapped for "${name}"`);
-        return null;
-    }
-
-    // Use same GeoServer URL you used successfully
-    const wfsUrl = 'https://10.1.4.18/geoserver/rmisv2db_prod/ows';
-
-    try {
-        // --- STEP A: Get Road IDs (GET Request) ---
-        const roadUrl = `${wfsUrl}?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:gis_sabah_road_map&outputFormat=application/json&propertyName=pkm_road_id&cql_filter=district_code='${encodeURIComponent(dCode)}'&maxFeatures=20000`;
-        const roadRes = await fetch(roadUrl, { method: 'GET', headers: { Accept: 'application/json' } });
-        if (!roadRes.ok) {
-            console.warn(`Road IDs request returned status ${roadRes.status}`);
-            // continue but treat as no roads
-            return { bridges: 0, bridgesPoor: 0, culverts: 0, culvertsPoor: 0 };
-        }
-        const roadData = await roadRes.json();
-        const roadIds = (roadData.features || [])
-            .map(f => f && f.properties && f.properties.pkm_road_id ? String(f.properties.pkm_road_id).trim() : null)
-            .filter(id => id);
-
-        if (roadIds.length === 0) {
-            // No roads in this district
-            districtStatsCache[name] = { bridges: 0, bridgesPoor: 0, culverts: 0, culvertsPoor: 0 };
-            return districtStatsCache[name];
-        }
-
-        // Build an OR filter for chunks of roadIds to avoid giant POST bodies if many IDs
-        const MAX_IDS_PER_CHUNK = 400; // tune as needed
-        function buildOrFilterForIds(ids) {
-            if (!ids || ids.length === 0) return '';
-            let orFilter = '<ogc:Or>';
-            ids.forEach(id => {
-                const safeId = escapeXml(id);
-                orFilter += `
-                    <ogc:PropertyIsLike wildCard="*" singleChar="." escapeChar="!">
-                        <ogc:PropertyName>road_id</ogc:PropertyName>
-                        <ogc:Literal>*${safeId}*</ogc:Literal>
-                    </ogc:PropertyIsLike>`;
-            });
-            orFilter += '</ogc:Or>';
-            return orFilter;
-        }
-
-        const buildXmlBody = (layerName, filterContent) => {
-            return `
-                <wfs:GetFeature service="WFS" version="1.0.0"
-                    resultType="hits"
-                    outputFormat="application/json"
-                    xmlns:wfs="http://www.opengis.net/wfs"
-                    xmlns:ogc="http://www.opengis.net/ogc"
-                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                    xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-basic.xsd">
-                    <wfs:Query typeName="${escapeXml(layerName)}">
-                        <ogc:Filter>
-                            ${filterContent}
-                        </ogc:Filter>
-                    </wfs:Query>
-                </wfs:GetFeature>`;
-        };
-
-        // fetchCount for a single layer, but will chunk by roadId groups and sum results
-        const fetchCount = async (layer, extraFilterXml = null) => {
-            // chunk the roadIds into groups
-            const chunks = [];
-            for (let i = 0; i < roadIds.length; i += MAX_IDS_PER_CHUNK) {
-                chunks.push(roadIds.slice(i, i + MAX_IDS_PER_CHUNK));
+// Asset Condition chart (Doughnut) INIT
+const assetChartCtx = document.getElementById('dashboard-asset-chart').getContext('2d');
+assetChart = new Chart(assetChartCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Good', 'Fair', 'Poor'],
+        datasets: [{
+            data: [0, 0, 0],
+            backgroundColor: ['#3ac370', '#face1a', '#d62222'],
+            borderColor: ['transparent', 'transparent', 'transparent'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        plugins: {
+            legend: { position: 'bottom',
+                labels: {
+                    color: '#ffffffff',
+                    font: { size: 12},
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    boxwidth: 7,
+                    boxHeight:7
+                }
+             },
+            datalabels: {
+                color: '#ffffffff',
+                font: { weight: 'bold', size: 11 },
+                formatter: function(value, context) {
+                    return value > 0 ? value : '';
+                }
             }
+        },
+        cutout: "65%",
+    },
+    plugins: [ChartDataLabels],
+});
 
-            // perform requests for each chunk and sum
-            const results = await Promise.all(chunks.map(async (idsChunk) => {
-                const orFilter = buildOrFilterForIds(idsChunk);
-                let finalFilter = orFilter;
-                if (extraFilterXml) {
-                    finalFilter = `<ogc:And>${orFilter}${extraFilterXml}</ogc:And>`;
+// Asset Type chart (Bar) INIT
+const typeChartCtx = document.getElementById('dashboard-type-chart').getContext('2d');
+typeChart = new Chart(typeChartCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Bridge', 'Culvert'], 
+        datasets: [{
+            label: 'Assets',
+            data: [0, 0], 
+            backgroundColor: ['#FF1493', '#00FFFF'],
+        }]
+    },
+    options: {
+        plugins: { 
+            legend: { display: false },
+            datalabels: {
+                color: '#ffffff', 
+                anchor: 'end',
+                align: 'top'
+            }
+        },
+        scales: { 
+            // Y-Axis (Vertical Numbers)
+            y: { 
+                beginAtZero: true, 
+                ticks: { color: '#ffffff', font: { size: 11 }} 
+            },
+            // X-Axis (Bridge, Culvert Labels)
+            x: {
+                ticks: { 
+                    color: '#ffffff', 
+                    font: { size: 11 }
                 }
-                const xmlBody = buildXmlBody(layer, finalFilter);
+            }
+        }
+    },
+    // Don't forget to include the plugin if you want numbers on top of bars
+    plugins: [ChartDataLabels] 
+});
 
-                const res = await fetch(wfsUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/xml',
-                        'Accept': 'application/json'
-                    },
-                    body: xmlBody
-                });
+async function getVisibleAssets(extent) {
+    // extent is [minX, minY, maxX, maxY] in EPSG:3857
+    // Convert extent to EPSG:4326 (lat/lon)
+    const min = ol.proj.toLonLat([extent[0], extent[1]]);
+    const max = ol.proj.toLonLat([extent[2], extent[3]]);
+    
+    // Build CQL filter: BBOX(geom, minLon, minLat, maxLon, maxLat, 'EPSG:4326')
+    const bboxCql = (min, max) => `BBOX(geom, ${min[0]}, ${min[1]}, ${max[0]}, ${max[1]}, 'EPSG:4326')`;
 
-                if (!res.ok) {
-                    console.warn(`WFS POST to ${layer} chunk returned status ${res.status}`);
-                    return 0;
-                }
-                const json = await res.json();
-                return extractFeatureCount(json);
-            }));
+    // WFS config for both types
+    const layers = [
+        { type: 'Bridge', url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+            'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_bridge&outputFormat=application/json&' +
+            'cql_filter=' + encodeURIComponent(bboxCql(min, max)) + 
+            '&maxFeatures=1000&_=' + Date.now()
+        },
+        { type: 'Culvert', url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+            'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_culvert&outputFormat=application/json&' +
+            'cql_filter=' + encodeURIComponent(bboxCql(min, max)) + 
+            '&maxFeatures=1000&_=' + Date.now()
+        }
+    ];
 
-            // sum chunked results
-            return results.reduce((a, b) => a + b, 0);
-        };
-
-        const poorBridgeXml = `
-            <ogc:PropertyIsLike wildCard="*" singleChar="." escapeChar="!">
-                <ogc:PropertyName>br_general_condition</ogc:PropertyName>
-                <ogc:Literal>*${escapeXml('Poor')}*</ogc:Literal>
-            </ogc:PropertyIsLike>`;
-
-        const poorCulvertXml = `
-            <ogc:PropertyIsLike wildCard="*" singleChar="." escapeChar="!">
-                <ogc:PropertyName>cv_general_condition</ogc:PropertyName>
-                <ogc:Literal>*${escapeXml('Poor')}*</ogc:Literal>
-            </ogc:PropertyIsLike>`;
-
-        // Parallel requests (but each will itself be chunked)
-        const [bTotal, bPoor, cTotal, cPoor] = await Promise.all([
-            fetchCount('rmisv2db_prod:tbl_bridge', null),
-            fetchCount('rmisv2db_prod:tbl_bridge', poorBridgeXml),
-            fetchCount('rmisv2db_prod:tbl_culvert', null),
-            fetchCount('rmisv2db_prod:tbl_culvert', poorCulvertXml)
-        ]);
-
-        const stats = {
-            bridges: bTotal,
-            bridgesPoor: bPoor,
-            culverts: cTotal,
-            culvertsPoor: cPoor
-        };
-
-        console.log(`✅ Stats for ${name}:`, stats);
-        districtStatsCache[name] = stats;
-        return stats;
-
-    } catch (err) {
-        console.error("❌ Stats Error:", err);
-        return null;
-    }
-}
-
-// 4. POINTERMOVE / EVENT LISTENER
-let currentHoveredDistrict = null;
-
-map.on('pointermove', async function (evt) {
-    if (evt.dragging) {
-        hoverTooltipElement.style.display = 'none';
-        return;
-    }
-
-    // Priority 1: assets (non-district layers)
-    const assetHit = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) {
-        // if layer is undefined (feature from vector source no layer) or layer not the districtLayer, treat as asset
-        return (layer && layer === districtLayer) ? null : feature;
-    });
-
-    if (assetHit) {
+    let allAssets = [];
+    for (const layer of layers) {
         try {
-            const props = assetHit.getProperties();
-            let content = null;
-
-            if (props.name && props.condition) {
-                const color = String(props.condition).toLowerCase() === 'poor' ? '#ff4d4d' : '#4dff88';
-                content = `<strong>${escapeXml(props.name)}</strong><br>Status: <span style="color:${color}">${escapeXml(props.condition)}</span>`;
-            } else if (props.road_name) {
-                content = `🛣️ ${escapeXml(props.road_name)}`;
-            } else if (props.name && String(props.name).startsWith("Stop")) {
-                content = `📍 ${escapeXml(props.name)}`;
-            }
-
-            if (content) {
-                hoverTooltipElement.innerHTML = content;
-                hoverOverlay.setPosition(evt.coordinate);
-                hoverTooltipElement.style.display = 'block';
-                map.getTargetElement().style.cursor = 'pointer';
-                currentHoveredDistrict = null;
-                return;
+            const res = await fetch(layer.url);
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data.features && data.features.length > 0) {
+                data.features.forEach(f => {
+                    f.properties._assetType = layer.type;
+                    allAssets.push(f.properties);
+                });
             }
         } catch (e) {
-            console.warn('Asset tooltip error:', e);
+            console.error("Error fetching assets for layer", layer.type, e);
         }
     }
+    return allAssets; // [{...props, _assetType: 'Bridge'}, {...props, _assetType: 'Culvert'}]
+}
 
-    // Priority 2: district polygon
-    const districtHit = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) {
-        return (layer === districtLayer) ? feature : null;
-    });
+function normalizeCondition(rawCond) {
+    if (!rawCond) return "Unknown";
+    const val = rawCond.toLowerCase().replace(/[^a-z]/gi, "");
+    if (val.startsWith("good")) return "Good";
+    if (val.startsWith("fair")) return "Fair";
+    if (val.startsWith("poor")) return "Poor";
+    return "Unknown";
+}
 
-    if (districtHit) {
-        // try multiple common name fields
-        const rawName = districtHit.get('NAME_2') || districtHit.get('name') || districtHit.get('NAM') || districtHit.get('Name') || null;
-        if (!rawName) return;
+async function updateDashboardCharts() {
+    // Only show when panel is open
+    if (dashboardPanel.style.display !== 'block') return;
 
-        const dName = String(rawName).trim();
-        hoverTooltipElement.style.display = 'block';
-        hoverOverlay.setPosition(evt.coordinate);
-        map.getTargetElement().style.cursor = 'help';
+    // Get map bounds in EPSG:3857!
+    const extent = map.getView().calculateExtent(map.getSize());
 
-        if (currentHoveredDistrict !== dName) {
-            console.log(`👉 Hovered new district: ${dName}`);
-            currentHoveredDistrict = dName;
-            hoverTooltipElement.innerHTML = `<strong>${escapeXml(dName)}</strong><br>Scanning DB...`;
+    // Fetch assets in viewport
+    const assets = await getVisibleAssets(extent);
 
-            const stats = await getDistrictStatsDeep(dName);
+    // Aggregate condition counts
+    let good=0, fair=0, poor=0;
+    let bridge=0, culvert=0;
 
-            if (stats) {
-                hoverTooltipElement.innerHTML = `
-                    <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; margin-bottom: 6px;">
-                        <strong style="font-size:14px;">${escapeXml(dName)}</strong>
-                    </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size:12px;">
-                        <div>
-                            <u style="font-size:10px; color:#cfcfcf">BRIDGES</u><br>
-                            Total: <b>${stats.bridges}</b><br>
-                            Poor: <b style="color:#ff4d4d">${stats.bridgesPoor}</b>
-                        </div>
-                        <div>
-                            <u style="font-size:10px; color:#cfcfcf">CULVERTS</u><br>
-                            Total: <b>${stats.culverts}</b><br>
-                            Poor: <b style="color:#ff4d4d">${stats.culvertsPoor}</b>
-                        </div>
-                    </div>
-                `;
-            } else {
-                hoverTooltipElement.innerHTML = `<strong>${escapeXml(dName)}</strong><br>No Assets Found or WFS Error.`;
-            }
-        }
-    } else {
-        // nothing under cursor
-        hoverTooltipElement.style.display = 'none';
-        currentHoveredDistrict = null;
-        map.getTargetElement().style.cursor = '';
-    }
-});
+    for (let asset of assets) {
+    let condRaw = undefined;
+    if (asset._assetType === "Bridge") condRaw = asset.br_general_condition;
+    if (asset._assetType === "Culvert") condRaw = asset.cv_general_condition;
+    const cond = normalizeCondition(condRaw);
+
+    if (asset._assetType === "Bridge") bridge++;
+    if (asset._assetType === "Culvert") culvert++;
+    if (cond === "Good") good++;
+    else if (cond === "Fair") fair++;
+    else if (cond === "Poor") poor++;
+}
+
+    document.getElementById('condition-summary').innerHTML = 
+    `<span style='color:#3ac370;'>Good: ${good}</span> | ` +
+    `<span style='color:#face1a;'>Fair: ${fair}</span> | ` +
+    `<span style='color:#d62222;'>Poor: ${poor}</span>`;
+
+    // Update Chart.js values
+    assetChart.data.datasets[0].data = [good, fair, poor];
+    assetChart.update();
+
+    typeChart.data.datasets[0].data = [bridge, culvert];
+    typeChart.update();
+}

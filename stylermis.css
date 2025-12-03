@@ -10,6 +10,23 @@ html, body {
   height: 100%;
 }
 
+#coords{
+  position: absolute; 
+  bottom: 10px; 
+  left: 50%; 
+  color:white; 
+  background-color: rgba(15, 102, 12, 0.15);
+}
+
+/* Style the button to match OpenLayers default look */
+.extend-control {
+    position: absolute !important;
+    top: 3.3em !important; /* Moves it down below the Zoom buttons */
+    left: 0.5em !important; /* Aligns it with the left edge */
+    z-index: 1000;
+}
+
+
 /* Top toolbar container */
 .toolbar {
   position: absolute;
@@ -206,6 +223,7 @@ html, body {
 
 /* Legend container */
 .legend {
+  width: 200px;
   position: absolute;
   bottom: 25px;
   left: 15px;
@@ -214,14 +232,30 @@ html, body {
   -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(0, 0, 0, 0.15);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  padding: 14px;
+  padding: 0;
   border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.6em;
-  overflow: hidden;
-  width: 180px;
-  max-height: 350px;
+  z-index: 1000;
   transition: all 0.3s ease;
+}
+
+.legend-content{
+  max-height: 350px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6rem;
+}
+
+.simplebar-scrollbar::before {
+    background-color: rgba(0, 0, 0, 0.4); /* Dark grey bar */
+    width: 4px; /* Thin style */
+    border-radius: 4px;
+    opacity: 0.5;
+}
+
+/* Move the vertical scrollbar slightly to the left so it doesn't touch the border */
+.simplebar-track.simplebar-vertical {
+    width: 8px;
+    margin-right: 2px;
 }
 
 .legend.minimized {
@@ -254,6 +288,7 @@ html, body {
   font-size: 16px;
   cursor: pointer;
   transition: background 0.2s ease;
+  z-index: 2000 !important;
 }
 
 #minimize-legend:hover {
@@ -275,6 +310,19 @@ html, body {
   margin: 5px 0;
   cursor: pointer;
   transition: opacity 0.2s;
+}
+
+#toggleRoadTypes,
+#toggleChainage,
+#toggleLMC,
+#toggleBC {
+  margin-bottom: 8px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
 }
 
 #chainageTypeItemsContainer .legend-item,
@@ -300,6 +348,12 @@ html, body {
   border-radius: 4px;
   flex-shrink: 0;
 }
+
+#legend-toggle-btn {
+    display: none; /* Hidden by default */
+}
+
+
 
 /* Search container */
 #searchContainer {
@@ -359,7 +413,6 @@ html, body {
 
 /* Medium screens - start stacking toolbar items */
 @media (max-width: 850px) {
-
   .toolbar-content {
     flex-direction: column;
     align-items: stretch;
@@ -370,6 +423,25 @@ html, body {
   .toolbar-title {
     width: 100%;
     text-align: center;
+    margin-bottom: 4px;
+  }
+
+    .toolbar-content.active-chart {
+    position: middle;
+    align-items: middle;
+    gap: 8px;
+    width: 100%;
+  }
+
+   #districtFilter.active-chart,
+  #filterBy.active-chart,
+  .search-wrapper.active-chart,
+  #resetButton.active-chart {
+    width: 100% !important;
+  }
+  
+  .toolbar-title.active-chart {
+    font-size: 15px;
     margin-bottom: 4px;
   }
 
@@ -393,11 +465,9 @@ html, body {
     right: 10px;
   }
 
-  .legend {
-    width: 160px;
-    bottom: 20px;
-    left: 10px;
-  }
+  #legend-toggle-btn {
+    display: none; /* Hidden by default */
+}
 
 } 
 
@@ -418,18 +488,19 @@ html, body {
     right: 10px;
   }
 
-  .legend {
-    width: 140px;
-    max-width: 200px;
-    overflow: auto;
-    bottom: 15px;
-    left: 10px;
-  }
+  #legend-toggle-btn {
+    display: none; /* Hidden by default */
+}
 
 }
 
 /* Mobile breakpoint - only move to bottom on very small screens */
 @media (max-width: 500px) {
+  .extend-control {
+        top: 4.5em !important;
+        left: 0.5em !important;
+    }
+
   /* Move search to bottom */
   #searchContainer {
     top: 15px;
@@ -437,9 +508,50 @@ html, body {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    width: calc(100% - 30px);
+    width: calc(100% - 30);
     max-width: 200px;
   }
+
+  .toolbar.active-chart{
+     bottom: auto;
+    top: 10px;
+    left: 35%;
+    width: 150px;
+  }
+
+  .toolbar-content.active-chart {
+    position: middle;
+    align-items: middle;
+    gap: 8px;
+    width: 100%;
+  }
+
+   #districtFilter.active-chart,
+  #filterBy.active-chart,
+  .search-wrapper.active-chart,
+  #resetButton.active-chart {
+    width: 100% !important;
+  }
+  
+  .toolbar-title.active-chart {
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+
+   #coords {
+        /* Move it UP so it sits above the sidebar buttons & route panel */
+        bottom: 80px; 
+        
+        /* Keep it centered */
+        left: 50%;
+        transform: translateX(-50%);
+        
+        /* Make it slightly smaller/cleaner for mobile */
+        font-size: 11px;
+        color: white;
+        padding: 4px 12px;
+        background-color: rgba(15, 102, 12, 0.15);
+    }
 
   /* Move toolbar above search */
   .toolbar {
@@ -465,112 +577,105 @@ html, body {
     margin-bottom: 4px;
   }
 
-  #minimize-toolbar {
-    right: 8px;
-    top: 8px;
-    width: 26px;
-    height: 26px;
-    line-height: 24px;
-    font-size: 16px;
-  }
-
-  .side-toolbar{
-  top: 60px;
-  width: calc (100% - 100px);
-
-  }
-
-  /* All toolbar elements same width */
-  #districtFilter,
-  #filterBy,
-  .search-wrapper,
-  #resetButton {
-    width: 100% !important;
-  }
-
-  .filter select,
-  .toolbar select,
-  .toolbar input[type="text"] {
-    width: 100%;
-    font-size: 15px;
-    padding: 8px 12px;
-  }
-
-  #resetButton {
-    padding: 8px 12px;
-    font-size: 15px;
-  }
-
-
-  /* Legend adjustments - move to top right to avoid overlap */
-  .legend {
+  /* Move side toolbar to bottom */
+  .side-toolbar {
     top: auto;
     bottom: 15px;
-    left: auto;
-    left: 10px;
-    width: 140px;
-    max-height: 200px;
-    overflow-y: auto;
-    padding: 10px;
-    font-size: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    flex-direction: row;
+    padding: 8px 12px;
+    background: rgba(15, 102, 12, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 0, 0, 0.3);
   }
 
-  .legend b {
-    font-size: 13px;
+  /* Stack buttons horizontally */
+  #sidebar-content {
+    flex-direction: row;
+    gap: 8px;
   }
 
-  .legend-color {
-    width: 14px;
-    height: 14px;
+  /* Adjust button sizes for bottom bar */
+  .side-toolbar button {
+    padding: 10px 12px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .legend-item {
-    gap: 6px;
-    margin: 4px 0;
+  .side-toolbar button img {
+    width: 20px;
+    height: 20px;
   }
 
+  /* Show legend toggle button ONLY on mobile */
+  #legend-toggle-btn {
+    display: block;
+  }
 
-  /* Minimize legend button */
+  /* Legend Box Default State (Hidden on mobile initially) */
+    .legend {
+        display: none !important;
+        width: 190px;
+        left: 5%;
+        bottom: 80px; 
+        z-index: 1000;
+        overflow: visible;
+    }
+
+    /* Legend Box ACTIVE State (When button is clicked) */
+    .legend.mobile-active {
+        display: block !important; 
+    }
+
+    .legend-content{
+      max-height: 30vh;
+    }
+
+  /* Hide minimize sidebar button on mobile */
   #minimize-legend {
-    width: 22px;
-    height: 22px;
-    line-height: 22px;
-    font-size: 14px;
-  }
-}
-
-.collapse-toggle,
-.toggle-group,
-.toggle-list,
-.toggle-BC {
-  margin-left: 8px;
-  font-size: 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-/* Small mobile breakpoint */
-@media (max-width: 400px) {
-  #searchContainer,
-  .toolbar {
-    width: calc(100% - 40%);
+    display: none;
   }
 
-  .toolbar-content {
-    width: 100%;
-  }
+  /* Move the Route Panel to the Bottom Center on phones */
+    .route-options-panel {
+        left: 70% !important;        
+        transform: translateX(-50%); 
+        top: auto !important;        
+        bottom: 80px;                
+        
+        width: 90%;                  
+        max-width: 350px;            
+        
+        margin-left: 0;              
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.3); 
+        
+        /* Override the desktop animation */
+        animation: slideUp 0.3s ease-out;
+    }
+    
+    @keyframes slideUp {
+        from { transform: translate(-50%, 20px); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+    }
 
-  .legend {
-    width: 130px;
-    max-height: 250px;
-    font-size: 11px;
-    overflow-y: auto;
-  }
-
-  .side-toolbar {
-    top: 80px;
-    gap: 6px;
-  }
+    /* Make buttons bigger for touch */
+    .route-option-btn {
+        padding: 18px 20px;      
+        font-size: 16px;         
+    }
+    
+    /* Adjust the Instruction Banner */
+    .route-banner {
+        top: 70px;               
+        width: 90%;              
+        font-size: 14px;         
+        text-align: center;
+    }
 
 }
