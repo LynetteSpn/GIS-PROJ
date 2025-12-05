@@ -1,5 +1,27 @@
-// === RMIS Unified Route/Optimization Logic ===
-// Single entry: plannerBtn. All legacy route-btn & optimize-btn code removed. Last update: 2025-12-02
+/* * =========================================================================
+ * RMIS 3.0 - Unified Map Interactions & Optimization Engine
+ * =========================================================================
+ * * FEATURES IMPLEMENTED:
+ * 1. MEASUREMENT TOOL: Interactive length measurement (Draw LineString on map).
+ * 
+ * 2. ROUTE PLANNER (PGROUTING):
+ * - Standard A to B routing (Select on map or GPS).
+ * - Route to Popup: Direct navigation from asset info popup.
+ * 
+ * 3. OPTIMIZATION MODULE (TSP):
+ * - Multi-stop Route Optimization using Nearest Neighbor logic.
+ * - Modes: Manual Selection, Critical Bridges Scan, Critical Culverts Scan.
+ * - Job List Management: Add, Remove, and Reorder (visual) stops.
+ * 
+ * 4. UI STATE MANAGEMENT:
+ * - Unified Panel System (Main Menu -> Workspace).
+ * - Floating Action Bar for adding points.
+ * - Mode switching (Standard vs. Optimization).
+ * 
+ * 5. GPS INTEGRATION: Real-time geolocation for start points.
+ * * DEPENDENCIES: OpenLayers (ol), Backend API (Port 3000), rmis.js (Base map).
+ * =========================================================================
+ */
 
 // =========================================================================
 // GLOBAL STATE VARIABLES

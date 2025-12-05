@@ -1,3 +1,27 @@
+/* * =========================================================================
+ * RMIS 1.0 - Core Map Configuration & Layer Management
+ * =========================================================================
+ * * CORE FUNCTIONS:
+ * 1. MAP INITIALIZATION: OpenLayers map setup with View and Interaction defaults.
+ * 
+ * 2. BASEMAP SWITCHER: Toggles between Satellite, Hybrid, and Regular OSM layers.
+ * 
+ * 3. LAYER MANAGEMENT:
+ * - WMS Layers (Roads, Chainage, LMC, Bridges, Culverts) from GeoServer.
+ * - Vector Layers (District Boundaries, Highlight styles).
+ * 
+ * 4. FILTERING SYSTEM:
+ * - District Filtering: Zooms to specific districts and filters WMS layers.
+ * - Road Type Filtering: Toggles specific road categories (e.g., Federal, State).
+ * 
+ * 5. SEARCH ENGINE:
+ * - WFS-based search for Roads, IDs, and Assets with autocomplete.
+ * - "Zoom To" feature highlights search results on the map.
+ * 
+ * 6. LEGEND CONTROL: Dynamic interactive legend for toggling layer visibility.
+ * =========================================================================
+ */
+
 let currentSearchField = 'road_name'; // Default search field
 const filterOptions = {
     'road_name': 'Road Name',

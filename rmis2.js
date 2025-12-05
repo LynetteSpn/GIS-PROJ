@@ -1,3 +1,21 @@
+/* * =========================================================================
+ * RMIS 2.0 - Map Interactions & Popups
+ * =========================================================================
+ * * CORE FEATURES:
+ * 1. MOUSE INTERACTIONS:
+ * - Latitude/Longitude display on pointer move.
+ * 
+ * 2. POPUP SYSTEM:
+ * - "Road Info" Popup: Detailed table view of WFS attributes.
+ * - "Drill-down" Navigation: Road -> Asset List -> Asset Details.
+ * - Action Buttons: Copy info, Route to location.
+ * 
+ * 3. GEOLOCATION TOOLS:
+ * - "Locate Me" button with accuracy circle.
+ * - Share current GPS coordinates via WhatsApp/Clipboard.
+ * =========================================================================
+ */
+
 // =========================================================================
 // 10. LATITUDE AND LONGITUDE DISPLAY
 // =========================================================================
@@ -444,23 +462,6 @@ async function handleRoadInfoClick(evt) {
         hideRoadInfo();
     }
 }
-
-// --- Control Functions to manage activation ---
-
-// function disableRoadInfoClick() {
-//     if (roadInfoListener) {
-//         ol.Observable.unByKey(roadInfoListener);
-//         roadInfoListener = null; 
-//     }
-// }
-
-// function enableRoadInfoClick() {
-//     if (!roadInfoListener) {
-//         // Re-attach the click listener, linking it to the handler function
-//         roadInfoListener = map.on('singleclick', handleRoadInfoClick);
-//     }
-// }
-// enableRoadInfoClick();
 
 // =========================================================================
 // 13. LOCATE ME BUTTON 

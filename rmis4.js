@@ -1,3 +1,15 @@
+/* * =========================================================================
+ * RMIS 4.0 - Advanced Analytics & Geospatial Dashboard
+ * =========================================================================
+ * * CORE FEATURES:
+ * 1. DASHBOARD ANALYTICS (Chart.js):
+ * - Real-time "Viewport-Driven" aggregation (calculates stats for visible map area).
+ * - Visualizes Asset Condition (Doughnut) and Asset Inventory (Bar).
+ * - bridges and culverts only.
+ * - Responsive UI: Floating panel with mobile toolbar adjustments.
+ * =========================================================================
+ */
+
 const dashboardPanel = document.getElementById('dashboard-panel');
 const dashboardOpenBtn = document.getElementById('chart-btn');
 const dashboardCloseBtn = document.getElementById('dashboard-close-btn');
