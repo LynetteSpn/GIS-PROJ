@@ -229,7 +229,7 @@ function showMainMenu() {
     routeMarkerSource.clear();
     routeSource.clear();
     if(isAddingJobs) toggleAddJobsMode(); // Stop adding if active
-    optMainMenu.style.display = 'block';
+    optMainMenu.style.display = 'flex';
     optWorkspace.style.display = 'none';
     btnBackMenu.style.display = 'none';
     optTitle.innerText = "Route Planner";

@@ -36,13 +36,13 @@
 
 #dashboard-asset-chart{
     width:"300";
-    height:"120";
+    height:"100";
 }
 
 #dashboard-type-chart{
     width:"300"; 
-    height:"80";
-    margin-top:10px;
+    height:"100";
+    margin-top:20px;
 }
 
 #condition-summary{
@@ -52,7 +52,7 @@
 }
 
 @media (max-width: 800px){
-      .toolbar-content.active-chart {
+    .toolbar-content.active-chart {
     position: middle;
     align-items: middle;
     gap: 8px;
@@ -93,8 +93,6 @@
     width: 150px;
   }
 
-
-
 }
 
 @media (max-width: 500px){
@@ -102,8 +100,8 @@
     display: none; 
                 position: absolute; 
                 top: 10px;
-                right: 10px;
-                width: 150px;
+                right: 5px;
+                width: 140px;
                 min-height: 300px;
                 z-index: 1000;
                 background: rgba(6, 44, 1, 0.15);
@@ -113,5 +111,84 @@
                 padding: 18px 18px 12px 18px;
                 transition: box-shadow 0.2s;
     }
+
+  .toolbar.active-chart{
+    bottom: auto;
+    top: 10px;
+    left: 32%;
+    width: 130px;
+  }
+
+  .toolbar-content.active-chart {
+    position: middle;
+    align-items: middle;
+    gap: 8px;
+    width: 100%;
+  }
+
+   #districtFilter.active-chart,
+  #filterBy.active-chart,
+  .search-wrapper.active-chart,
+  #resetButton.active-chart {
+    width: 100% !important;
+  }
+  
+  .toolbar-title.active-chart {
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
 }
 
+@media (max-width: 360px){
+    #dashboard-panel{
+    display: none; 
+                position: absolute; 
+                top: 5px;
+                right: 2px;
+                width: 133px;
+                height: auto;
+                z-index: 1000;
+                background: rgba(6, 44, 1, 0.15);
+                box-shadow: 0 2px 6px #00000022;
+                backdrop-filter: blur(10px);
+                border-radius: 12px;
+                padding: 15px 12px 10px 12px;
+                transition: box-shadow 0.2s;
+    }
+
+  .toolbar.active-chart{
+    bottom: auto;
+    top: 10px;
+    left: 33%;
+    width: 110px;
+  }
+
+  .toolbar-content.active-chart {
+    position: middle;
+    align-items: middle;
+    gap: 8px;
+    width: 100%;
+  }
+
+   #districtFilter.active-chart,
+  #filterBy.active-chart,
+  .search-wrapper.active-chart,
+  #resetButton.active-chart {
+    width: 100% !important;
+  }
+  
+  .toolbar-title.active-chart {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .toolbar.minimized.active-chart {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+}

@@ -309,36 +309,43 @@ const basemapButton = document.getElementById('switchBasemap');
 // A helper function to manage visibility
 function setBasemap(mode) {
     if (mode === 'REGULAR') {
+        // Show Regular (OSM), Hide Satellite & Labels
         regularLayer.setVisible(true);
         satelliteLayer.setVisible(false);
-        labelsLayer.setVisible(false);
+        labelsLayer.setVisible(false); 
+        
+        // Update Tooltip for next click
         basemapButton.title = "Switch to Satellite Imagery";
-    } else if (mode === 'SATELLITE') {
+        
+    } else { 
+        // Mode is 'SATELLITE'
+        // Show Satellite, Hide Regular & Labels
         regularLayer.setVisible(false);
         satelliteLayer.setVisible(true);
-        labelsLayer.setVisible(false); // Satellite only
-        basemapButton.title = "Switch to Hybrid Map";
-    } else if (mode === 'HYBRID') {
-        regularLayer.setVisible(false);
-        satelliteLayer.setVisible(true); // Satellite base
-        labelsLayer.setVisible(true); // Labels on top
+        labelsLayer.setVisible(false); 
+        
+        // Update Tooltip for next click
         basemapButton.title = "Switch to Regular Map";
     }
+    
     currentBasemap = mode;
 
-    // isSatellite variable used in districtFilterStyle. Update it.
-    isSatellite = (mode === 'SATELLITE' || mode === 'HYBRID');
-    districtLayer.setStyle(districtFilterStyle); 
-    districtLayer.changed();
+    // Update global variable for styles
+    // (Previously matched SATELLITE or HYBRID, now just SATELLITE)
+    isSatellite = (mode === 'SATELLITE');
+    
+    // Refresh district layer styles to match the new basemap
+    if (typeof districtLayer !== 'undefined') {
+        districtLayer.setStyle(districtFilterStyle); 
+        districtLayer.changed();
+    }
 }
 
-// Update the click listener for the cycle
+// Simple Toggle Listener (A -> B -> A)
 basemapButton.addEventListener('click', function () {
     if (currentBasemap === 'SATELLITE') {
-        setBasemap('HYBRID');
-    } else if (currentBasemap === 'HYBRID') {
         setBasemap('REGULAR');
-    } else { // Current is REGULAR or initial state
+    } else {
         setBasemap('SATELLITE');
     }
 });

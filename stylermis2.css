@@ -3,7 +3,8 @@
    ========================================================================= */
 /* Hover effect for the asset list table */
 .ol-popup {
-    position: absolute;
+    position: sticky;
+    top: 0;
     background: rgba(15, 102, 12, 0.95);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -76,6 +77,8 @@
 
 /* Popup Header */
 .popup-header {
+    position: sticky;
+    top: 0 ;
     background: linear-gradient(135deg, rgb(5, 61, 0) 0%, rgb(3, 45, 0) 100%);
     color: white;
     padding: 16px 20px;
@@ -342,19 +345,18 @@
     color: white;
     display: flex;
     align-items: center;
+
     gap: 8px;
 }
 
 .route-option-btn {
-    display: block;
+    display: flex;
     width: 100%;
-    padding: 12px 10px;
-    background: none;
-    border: none;
-    text-align: left;
-    font-size: 13px;
+    padding: 5px !important;
+    min-height: 30px !important;
+    gap: 8px;
     cursor: pointer;
-    
+    font-size: 12px;
 }
 
 .route-option-btn:hover {
@@ -386,7 +388,8 @@
     position: absolute;
     left: 100%;
     top: 180px;
-    width: 230px;
+    width: 150px;
+    border-radius: 5px;
     background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -401,9 +404,13 @@
 
 .optimization-header {
     background: linear-gradient(135deg, rgb(5, 61, 0) 0%, rgb(3, 45, 0) 100%);
-    padding: 14px 16px;
     display: flex;
+    position: sticky;
+    top: 0 ;
+    z-index: 10;
+    border-radius: 10px;
     justify-content: space-between;
+    padding: 16px;
     align-items: center;
     border-bottom: 2px solid rgb(3, 45, 0);
 }
@@ -418,20 +425,11 @@
 }
 
 .optimization-close-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    color: white;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 20px;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
+    padding: 5px !important;
+    font-size: 10px !important;
     line-height: 1;
+    min-height: 30px !important;
+    min-width: 30px !important;
 }
 
 .optimization-close-btn:hover {
@@ -507,29 +505,13 @@
 }
 
 /* Actions Container */
-.optimization-actions {
+.optimization-actions,
+#opt-main-menu {
     padding: 10px 10px;
     background: white;
-    display: flex;
     flex-direction: column;
+    border-radius: 10px;
     gap: 8px;
-}
-
-/* Modern Button Styles */
-.optimization-btn {
-    width: 100%;
-    padding: 12px 16px;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .optimization-btn:hover {
@@ -543,6 +525,11 @@
 
 .btn-icon {
     font-size: 16px;
+}
+
+#planner-btn.active{
+    background: rgba(0, 255, 150, 0.9);
+    box-shadow: 0 0 10px rgba(0, 255, 150, 0.6);
 }
 
 /* Scan Critical Button */
@@ -757,6 +744,11 @@
     border-left: 8px solid transparent;
 }
 
+#measure-btn.active{
+    background: rgba(0, 255, 150, 0.9);
+    box-shadow: 0 0 10px rgba(0, 255, 150, 0.6);
+}
+
 .ol-tooltip-static {
     background: linear-gradient(135deg, #fde047 0%, #facc15 100%);
     color: #78350f;
@@ -824,12 +816,6 @@
         to { transform: translate(-50%, 0); opacity: 1; }
     }
 
-    /* Make buttons bigger for touch */
-    .route-option-btn {
-        padding: 18px 20px;      
-        font-size: 16px;         
-    }
-    
     /* Adjust the Instruction Banner */
     .route-banner {
         top: 0px;               
@@ -846,18 +832,13 @@
         bottom: 80px;
         width: 90%;
         max-width: 250px;
-        height: 350px;
+        height: 300px;
         margin-left: 0;
         box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
         animation: slideUp 0.3s ease-out;
         overflow-y: auto;
     }
-
-    .optimization-header{
-        font : 14px;
-        padding: 10px;
-    }
-
+    
     .optimization-close-btn{
         width : 15px;
         height : 15px;
@@ -870,8 +851,9 @@
         max-height: 30vh;
     }
 
+    
     /* Make optimization buttons touch-friendly */
-    .optimization-panel .optimization-btn {
+    .optimization-panel .optimization-btn{
         padding:5px;
         font-size: 12px;
         min-height: 30px; /* Better touch target */

@@ -70,6 +70,19 @@ html, body {
   display: none;
 }
 
+.toolbar.minimized #minimize-toolbar {
+  width: 100%;              
+  height: 100%;
+  padding: 0;              
+  border: none;             
+  background: transparent;  
+  display: flex;            
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: static;       
+}
+
 #minimize-toolbar {
   position: absolute;
   top: -3px;
@@ -512,31 +525,6 @@ html, body {
     max-width: 200px;
   }
 
-  .toolbar.active-chart{
-     bottom: auto;
-    top: 10px;
-    left: 35%;
-    width: 150px;
-  }
-
-  .toolbar-content.active-chart {
-    position: middle;
-    align-items: middle;
-    gap: 8px;
-    width: 100%;
-  }
-
-   #districtFilter.active-chart,
-  #filterBy.active-chart,
-  .search-wrapper.active-chart,
-  #resetButton.active-chart {
-    width: 100% !important;
-  }
-  
-  .toolbar-title.active-chart {
-    font-size: 15px;
-    margin-bottom: 4px;
-  }
 
    #coords {
         /* Move it UP so it sits above the sidebar buttons & route panel */

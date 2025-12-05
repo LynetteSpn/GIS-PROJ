@@ -87,8 +87,9 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
         { key: 'end_node_coord', label: 'End Chainage' }
     ];
 
-    let html = '<div class="popup-header">Road Information</div>';
-    
+    let html = '<div class="popup-header">Road Information </div>';
+
+
     // --- FOOTER BUTTONS SETUP ---
     
     // Button 1: Copy (Left side)
@@ -97,7 +98,14 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
             <i class="fas fa-copy"></i> Copy Info
         </button>`;
 
-    // Button 2: Next (Right side - Only if assets exist)
+    // Button 2: DIRECTIONS (NEW) 🚗
+    // We pass the clicked coordinates to the function
+    let dirBtnHtml = `
+        <button class="popup-action-btn" style="color: #007bff;" onclick="routeToPopupLocation(${clickedLon}, ${clickedLat}); return false;" title="Route from My Location">
+            <i class="fas fa-location-arrow"></i> <b>Go Here</b>
+        </button>`;
+
+    // Button 3: Next (Right side - Only if assets exist)
     let nextBtnHtml = '';
 
     if (nearbyAssets && nearbyAssets.length > 0) {
@@ -157,6 +165,7 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
         
         <div class="popup-footer">
             ${copyBtnHtml}
+            ${dirBtnHtml}
             ${nextBtnHtml}
         </div>`;
 
