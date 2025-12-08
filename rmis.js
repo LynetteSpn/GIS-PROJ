@@ -274,6 +274,18 @@ const districtLayer = new ol.layer.Vector({
 });
 districtLayer.set('name', 'DistrictLayer');
 
+// Layer to show the red click circle
+const clickRadiusSource = new ol.source.Vector();
+const clickRadiusLayer = new ol.layer.Vector({
+    source: clickRadiusSource,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: 'rgba(255, 0, 0, 0.5)', width: 2 }),
+        fill: new ol.style.Fill({ color: 'rgba(255, 0, 0, 0.1)' })
+    }),
+    zIndex: 9999 // Always on top
+});
+
+
 const highlightLayer = new ol.layer.Vector({
     source: new ol.source.Vector(),
     style: highlightRoadStyle
@@ -309,7 +321,7 @@ const routeMarkerLayer = new ol.layer.Vector({
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, lmcRoadLayer, roadLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer,chainageLayer, highlightLayer],
+    layers: [baseGroup, lmcRoadLayer, roadLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer,chainageLayer, clickRadiusLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -780,7 +792,7 @@ minimizeToolbarBtn.addEventListener("click", function () {
         minimizeToolbarBtn.innerHTML = '<img src="search.png" alt="Search" style="width:17px;height:17px;">';
         minimizeToolbarBtn.title = "Maximize Toolbar";
     } else {
-        minimizeToolbarBtn.innerHTML = "-";
+        minimizeToolbarBtn.innerHTML = "×";
         minimizeToolbarBtn.title = "Minimize Toolbar";
     }
 });

@@ -11,28 +11,57 @@
  */
 
 const dashboardPanel = document.getElementById('dashboard-panel');
-const dashboardOpenBtn = document.getElementById('chart-btn');
+const dashboardOpenBtn = document.getElementById('chart-btn'); // Or 'dashboard-toggle' if you switched to slider
 const dashboardCloseBtn = document.getElementById('dashboard-close-btn');
 
-dashboardOpenBtn.onclick = function() {
-    dashboardPanel.style.display = 'block';
-    updateDashboardCharts();
+// --- 1. OPEN DASHBOARD HANDLER ---
+if (dashboardOpenBtn) {
+    dashboardOpenBtn.onclick = function() {
+        // A. Show the Panel
+        dashboardPanel.style.display = 'block';
+        
+        // B. Run Calculations
+        updateDashboardCharts();
 
-    if(window.innerWidth <= 850){
-        toolbar.classList.add('active-chart');
-    }
-};
+        // C. Mobile UI Adjustments
+        const tb = document.getElementById('toolbar');
+        if(window.innerWidth <= 850 && tb){
+            tb.classList.add('active-chart');
+        }
 
-dashboardCloseBtn.onclick = function() {
-    dashboardPanel.style.display = 'none';
-    dashboardOpenBtn.style.display = 'block';
-     if (window.innerWidth <= 850) {
-        toolbar.classList.remove('active-chart');
-    }
-};
+        // --- D. AUTO-ENABLE BRIDGE/CULVERT LAYER (NEW) ---
+        const bcCheckbox = document.getElementById('BCCheckbox');
+        // Only turn it on if it's currently OFF
+        if (bcCheckbox && !bcCheckbox.checked) {
+            bcCheckbox.checked = true; // Visually check the box
+            // Dispatch event to trigger the map layer logic in rmis.js
+            bcCheckbox.dispatchEvent(new Event('change'));
+        }
+        // --------------------------------------------------
+    };
+}
 
+// --- 2. CLOSE DASHBOARD HANDLER ---
+if (dashboardCloseBtn) {
+    dashboardCloseBtn.onclick = function() {
+        dashboardPanel.style.display = 'none';
+        
+        // If using a toggle/slider, you might need to uncheck it here too
+        // if (dashboardOpenBtn.type === 'checkbox') dashboardOpenBtn.checked = false;
+        
+        if (dashboardOpenBtn.style.display === 'none') {
+             dashboardOpenBtn.style.display = 'block';
+        }
+
+        const tb = document.getElementById('toolbar');
+        if (window.innerWidth <= 850 && tb) {
+            tb.classList.remove('active-chart');
+        }
+    };
+}
+
+// --- 3. CHART INITIALIZATION (Rest of your file remains the same) ---
 let assetChart, typeChart;
-
 
 // Asset Condition chart (Doughnut) INIT
 const assetChartCtx = document.getElementById('dashboard-asset-chart').getContext('2d');

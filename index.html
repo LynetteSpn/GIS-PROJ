@@ -2,8 +2,11 @@
 <html>
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>RMIS Basemap Switcher</title>
+        <link rel="manifest" href="manifest.json">
+        <meta name="theme-color" content="#053d00">
+        <link rel="apple-touch-icon" href="icon.png">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
         <link rel="stylesheet" href="https://unpkg.com/simplebar@latest/dist/simplebar.css" />
         <link rel="stylesheet" href="./stylermis.css">
@@ -16,18 +19,25 @@
         <div id="map" class="map"></div>
 
         <div class="ol-control extend-control">
-            <button id="center-button" title="Exxtend Map">E</button>
+            <button id="center-button" title="Extend Map">E</button>
         </div>
 
         <div id="coords"> Lat: -, Lng: -</div>
 
         <div id="road-popup" class ="ol-popup" data-simplebar>
-            <a href="#" id="road-popup-closer" class="ol-popup-closer">&times;</a>
             <div id="road-popup-content"></div>
         </div>
 
+        <div id="selection-panel" class="selection-panel" title="Switch Selection Mode">
+            <label class="switch-wide">
+                <input type="checkbox" id="select-mode-toggle">
+                <span class="slider-text round"></span>
+            </label>
+        </div>
+
         <div id="toolbar" class="toolbar">
-             <button id="minimize-toolbar" title="Minimize Toolbar">-</button>
+
+             <button id="minimize-toolbar" title="Minimize Toolbar">×</button>
             <div id="toolbar-content" class="toolbar-content">
                 
                     <div id="toolbar-title" class="toolbar-title">Search</div>
@@ -197,7 +207,17 @@
             </div>
         </div>
 
-        
+        <!-- PWA (PROGRESSIVE WEB APPLICATION - SERVICE WORKER) SCRIPT -->
+       <script>
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then((reg) => console.log('✅ Service Worker Registered', reg.scope))
+                .catch((err) => console.log('❌ SW Registration Failed', err));
+            });
+        }
+        </script>
 
         <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
         <script src="https://unpkg.com/simplebar@latest/dist/simplebar.min.js"></script>

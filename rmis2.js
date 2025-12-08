@@ -16,53 +16,69 @@
  * =========================================================================
  */
 
+// 1. GLOBAL VARIABLES
+window.multiSelectFeatures = []; 
+let popupState = {
+    currentIndex: 0, 
+    pages: [], // Stores the "Page Objects" (Road, BridgeGroup, CulvertGroup)
+    roadCopyText: ''
+};
+
+// =========================================================
+// SELECTION MODE TOGGLE (Area vs Single)
+// =========================================================
+window.currentSelectionMode = 'radius'; 
+
+const selectModeToggle = document.getElementById('select-mode-toggle');
+if (selectModeToggle) {
+    selectModeToggle.addEventListener('change', function() {
+        if (this.checked) {
+            window.currentSelectionMode = 'precise';
+            if (typeof highlightLayer !== 'undefined') highlightLayer.getSource().clear();
+            if (typeof hideRoadInfo === 'function') hideRoadInfo();
+        } else {
+            window.currentSelectionMode = 'radius';
+        }
+    });
+}
+
 // =========================================================================
-// 10. LATITUDE AND LONGITUDE DISPLAY
+// 10. MOUSE INTERACTIONS
 // =========================================================================
-//Latitude and Longitude display on mouse move
 map.on('pointermove', function (evt) {
     const coord = ol.proj.toLonLat(evt.coordinate);
     const lon = coord[0].toFixed(5);
     const lat = coord[1].toFixed(5);
-
     document.getElementById('coords').innerHTML = `Lat: ${lat}, Lng: ${lon}`;
 });
 
-// At the absolute bottom of rmis.js
 if (typeof initTooltipLogic === 'function') {
     initTooltipLogic();
 }
 
 // =========================================================================
-//  SHARE LOCATION FUNCTION & OVERLAY
+// 11. SHARE LOCATION & OVERLAYS
 // =========================================================================
-// New overlay for the share info popup
 let sharePopup = new ol.Overlay({ 
     element: document.createElement('div'), 
     positioning: 'bottom-center',
     offset: [0, -15] 
 });
-map.addOverlay(sharePopup); // Add the overlay to the map
+map.addOverlay(sharePopup);
 
 function copyCoordsToClipboard(lat, lon) {
     const textToCopy = `Lat: ${lat}, Lng: ${lon}`;
-    
-    // Use the modern clipboard API
     navigator.clipboard.writeText(textToCopy).then(() => {
-        // Simple alert for confirmation
-        alert(`Copied coordinates to clipboard: ${textToCopy}`);
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-        alert('Failed to copy coordinates. Please check browser permissions.');
-    });
+        alert(`Copied: ${textToCopy}`);
+    }).catch(err => console.error('Copy failed', err));
 }
 
 // =========================================================================
-// 12. TOOLTIP POPUP FOR ROAD INFO (WFS-on-Demand Click)
+// 12. ROAD POPUP LOGIC
 // =========================================================================
 const popupElement = document.getElementById('road-popup');
 const popupContent = document.getElementById('road-popup-content');
-const popupCloser = document.getElementById('road-popup-closer');
+// Note: We don't use getElementById for closer anymore because it's dynamic
 
 const popup = new ol.Overlay({
     element: popupElement,
@@ -74,15 +90,165 @@ map.addOverlay(popup);
 
 let lockedPopup = false;
 
-// In popup.js
-// ===========================================================================
-// showRoadInfo with "Next" Button Logic (for Bridge and Culvert detail info)
-// ===========================================================================
+// EVENT DELEGATION FOR CLOSE BUTTON (Fixes "null" error)
+if (popupElement) {
+    popupElement.addEventListener('click', function(evt) {
+        if (evt.target.matches('.ol-popup-closer') || evt.target.closest('.ol-popup-closer')) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            hideRoadInfo();
+        }
+    });
+}
+
+function hideRoadInfo() {
+    popupElement.style.display = 'none';
+    popup.setPosition(undefined);
+    lockedPopup = false;
+
+    // --- NEW: Clear the cyan highlight line ---
+    if (typeof highlightLayer !== 'undefined') {
+        highlightLayer.getSource().clear();
+    }
+    
+    // Optional: Also clear the red click circle if it's still there
+    if (typeof clickRadiusSource !== 'undefined') {
+        clickRadiusSource.clear();
+    }
+}
+// =========================================================================
+// 13. MULTI-SELECT LIST LOGIC (The List View)
+// =========================================================================
+
+// 3. THE SELECTION HANDLER (Attached to Window)
+window.selectSpecificRoad = function(index, coordinate) {
+    // Safety check
+    if (!window.multiSelectFeatures || !window.multiSelectFeatures[index]) {
+        console.error("Feature not found in memory. Index:", index);
+        return;
+    }
+
+    const selectedFeature = window.multiSelectFeatures[index];
+    
+    if (selectedFeature) {
+        // 1. HIGHLIGHT & ZOOM LOGIC
+        if (typeof highlightLayer !== 'undefined') {
+            highlightLayer.getSource().clear();
+            
+            // Clone feature so we don't mess up the original
+            const clone = selectedFeature.clone();
+            const geom = clone.getGeometry();
+            
+            if (geom) {
+                // Transform to map projection (EPSG:3857) if needed
+                geom.transform('EPSG:4326', map.getView().getProjection());
+                
+                // Add to highlight layer
+                highlightLayer.getSource().addFeature(clone);
+                
+                // --- NEW: ZOOM TO FEATURE ---
+                const extent = geom.getExtent();
+                map.getView().fit(extent, {
+                    padding: [100, 100, 100, 100], // Padding so popup doesn't cover the road
+                    duration: 1000,                // Animation speed (1 second)
+                    maxZoom: 17                    // Don't zoom too close for tiny segments
+                });
+            }
+        }
+        
+        // 2. Call the main processor (Show Popup Details)
+        if (typeof window.processSingleFeature === 'function') {
+            window.processSingleFeature(selectedFeature, coordinate);
+        } else if (typeof processSingleFeature === 'function') {
+            processSingleFeature(selectedFeature, coordinate);
+        } else {
+            console.error("processSingleFeature function missing! Ensure rmis.js is loaded.");
+        }
+    }
+};
+
+// STEP B: The Function to Render the List
+function showMultiRoadList(features, coordinate) {
+    window.multiSelectFeatures = features; 
+    
+    // NEW: Save the coordinate so we can come back here later
+    popupState.lastListCoordinate = coordinate; 
+
+    let html = `
+        <div class="popup-header">
+            Found ${features.length} Roads
+            <a href="#" class="ol-popup-closer" onclick="hideRoadInfo(); return false;">&times;</a>
+        </div>
+        <div class="popup-table-container" style="max-height:300px; overflow-y:auto;">
+            <table class="popup-table asset-list-table">
+                <thead>
+                    <tr style="background:#f5f5f5; font-size:11px;">
+                        <th style="padding:8px;">Type</th>
+                        <th style="padding:8px;">Road Name / ID</th>
+                        <th style="padding:8px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+    features.forEach((f, index) => {
+        const props = f.getProperties();
+        const type = props.layer || 'UNK';
+        const name = props.road_name || props.pkm_road_id || 'Unnamed Road';
+        const typeMap = {'UNID':'unid','FEDERAL':'federal','JKR':'jkr','MCDC':'mcdc','PLANTATION':'plantation','JLN KAMPUNG':'kampung','OTHER':'other'};
+        const cssClass = typeMap[type] || 'other';
+
+        const coordStr = JSON.stringify(coordinate).replace(/"/g, '&quot;');
+
+        html += `
+            <tr onclick='window.selectSpecificRoad(${index}, ${coordStr})' style="cursor:pointer; border-bottom:1px solid #eee;">
+                <td style="padding:8px;"><span class="road-type-badge road-type-${cssClass}" style="font-size:10px;">${type}</span></td>
+                <td style="padding:8px; font-weight:bold; color:#333;">${name}</td>
+                <td style="padding:8px; text-align:center; color:#007bff;">&rarr;</td>
+            </tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    
+    const popupContent = document.getElementById('road-popup-content');
+    const popupElement = document.getElementById('road-popup');
+    const popupOverlay = map.getOverlays().getArray().find(o => o.getElement() === popupElement);
+    
+    popupContent.innerHTML = html;
+    if(popupOverlay) popupOverlay.setPosition(coordinate);
+    popupElement.style.display = 'block';
+    lockedPopup = true;
+}
+
+// =========================================================================
+// 14. SINGLE ROAD DETAIL VIEW (Carousel Logic)
+// =========================================================================
+
 function showRoadInfo(feature, coordinate, nearbyAssets = []) {
     const props = feature.getProperties();
-    if (props['NAME_2']) return;
+    if (props['NAME_2']) return; 
 
-    // 1. Prepare Click Coordinates
+    // --- 1. PREPARE PAGES ---
+    popupState.pages = [];
+    popupState.currentIndex = 0;
+
+    // Page 0: The Road Itself (Always exists)
+    popupState.pages.push({ type: 'ROAD', data: props, coords: coordinate });
+
+    // Filter Assets by Type
+    const bridges = nearbyAssets.filter(a => a.properties._assetType === 'Bridge');
+    const culverts = nearbyAssets.filter(a => a.properties._assetType === 'Culvert');
+
+    // Page 1: Bridges (If any)
+    if (bridges.length > 0) {
+        popupState.pages.push({ type: 'BRIDGES', data: bridges });
+    }
+
+    // Page 2: Culverts (If any)
+    if (culverts.length > 0) {
+        popupState.pages.push({ type: 'CULVERTS', data: culverts });
+    }
+
+    // --- 2. PREPARE ROAD DISPLAY ---
     const clickedLonLat = ol.proj.toLonLat(coordinate);
     const clickedLat = clickedLonLat[1].toFixed(6);
     const clickedLon = clickedLonLat[0].toFixed(6);
@@ -90,7 +256,6 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
     let copyText = '';
     let tableRows = '';
 
-    // 2. Define Fields (Same as before)
     const fields = [
         { key: 'district_name', label: 'District', fallbackKey: 'district_code' },
         { key: 'layer', label: 'Road Type' },
@@ -105,363 +270,475 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
         { key: 'end_node_coord', label: 'End Chainage' }
     ];
 
-    let html = '<div class="popup-header">Road Information </div>';
-
-
-    // --- FOOTER BUTTONS SETUP ---
-    
-    // Button 1: Copy (Left side)
-    let copyBtnHtml = `
-        <button class="popup-action-btn" onclick="copyRoadInfoToClipboard(this); return false;">
-            <i class="fas fa-copy"></i> Copy Info
-        </button>`;
-
-    // Button 2: DIRECTIONS (NEW) 🚗
-    // We pass the clicked coordinates to the function
-    let dirBtnHtml = `
-        <button class="popup-action-btn" style="color: #007bff;" onclick="routeToPopupLocation(${clickedLon}, ${clickedLat}); return false;" title="Route from My Location">
-            <i class="fas fa-location-arrow"></i> <b>Go Here</b>
-        </button>`;
-
-    // Button 3: Next (Right side - Only if assets exist)
-    let nextBtnHtml = '';
-
-    if (nearbyAssets && nearbyAssets.length > 0) {
-        popupContent.dataset.assets = JSON.stringify(nearbyAssets);
-        
-        // Styled as a "Next" navigation button
-        nextBtnHtml = `
-            <button class="popup-action-btn btn-next" onclick="showAssetList(); return false;">
-                Next (${nearbyAssets.length}) &rarr;
-            </button>`;
-    }
-
-    // 4. Add Clicked Location
-    html += `
-        <div class="popup-location-section">
-            <span class="location-label">Clicked Location:</span>
-            <span class="location-value">${clickedLat}, ${clickedLon}</span>
-        </div>`;
-    
-    copyText += `CLICKED: ${clickedLat}, ${clickedLon}\n\n`;
-
-    // 5. Loop through fields (Standard Table Logic)
     fields.forEach(field => {
         let val = props[field.key];
-        if ((val === null || val === undefined || val === '') && field.fallbackKey) val = props[field.fallbackKey];
-        if (val === null || val === undefined || val === 'null') val = '-';
+        if (!val && field.fallbackKey) val = props[field.fallbackKey];
+        if (!val || val === 'null') val = '-';
 
         let displayValue = val;
-
-        if (['gis_length', 'marris_length', 'total_pv_length'].includes(field.key) && val !== '-') displayValue = `${val} KM`;
-        
         if (field.key === 'layer' && val !== '-') {
-            const typeMap = {'UNID':'unid','FEDERAL':'federal','JKR':'jkr','MCDC':'mcdc','PLANTATION':'plantation','JLN KAMPUNG':'kampung','OTHER':'other'};
-            const cssClass = typeMap[val] || 'other';
-            displayValue = `<span class="road-type-badge road-type-${cssClass}">${val}</span>`;
+             const typeMap = {'UNID':'unid','FEDERAL':'federal','JKR':'jkr','MCDC':'mcdc','PLANTATION':'plantation','JLN KAMPUNG':'kampung','OTHER':'other'};
+             displayValue = `<span class="road-type-badge road-type-${typeMap[val] || 'other'}">${val}</span>`;
         }
-
-        if (field.key === 'road_name' && val !== '-') {
-             displayValue = `<span class="road-name-clickable" onclick="copyRoadNameOnly(this, '${val.replace(/'/g, "\\'")}')" title="Click to copy">${val}</span>`;
-        }
-        if (['start_node_coord', 'end_node_coord'].includes(field.key) && val !== '-') {
-             displayValue = `<span class="coord-value">${val}</span>`;
-        }
-
-        tableRows += `<tr><td class="popup-label">${field.label}</td><td class="popup-value">${displayValue}</td></tr>`;
         
-        let cleanVal = val.toString().replace(/<[^>]*>?/gm, ''); 
-        if (['gis_length', 'marris_length', 'total_pv_length'].includes(field.key) && val !== '-') cleanVal += ' KM';
-        copyText += `${field.label}: ${cleanVal}\n`;
+        tableRows += `<tr><td class="popup-label">${field.label}</td><td class="popup-value">${displayValue}</td></tr>`;
+        copyText += `${field.label}: ${val}\n`;
     });
 
-    // 6. Final Assembly
-    html += `
-        <div class="popup-table-container">
-            <table class="popup-table">${tableRows}</table>
-        </div>
-        
-        <div class="popup-footer">
-            ${copyBtnHtml}
-            ${dirBtnHtml}
-            ${nextBtnHtml}
-        </div>`;
-
+    popupState.roadCopyText = copyText;
     popupContent.dataset.copyText = copyText;
-    popupContent.dataset.roadHtml = html; 
-    popupContent.innerHTML = html;
+
+    // --- 3. RENDER INITIAL VIEW (ROAD) ---
+    renderPopupPage(0);
+    
     popup.setPosition(coordinate);
     popupElement.style.display = 'block';
-    lockedPopup = true; 
+    lockedPopup = true;
 }
 
-// Function to switch the popup view to the Asset List
-window.showAssetList = function() {
-    const assetsStr = document.getElementById('road-popup-content').dataset.assets;
-    if (!assetsStr) return;
-
-    const assets = JSON.parse(assetsStr);
-    let html = '<div class="popup-header">Nearby Bridge/Culvert</div>';
-
-    // Create a clickable list of assets
-    html += '<div class="popup-table-container"><table class="popup-table asset-list-table">';
-    
-    assets.forEach((asset, index) => {
-        const p = asset.properties;
-        const type = p._assetType; // 'Bridge' or 'Culvert'
+window.restoreMultiList = function() {
+    // Safety check
+    if (window.multiSelectFeatures && window.multiSelectFeatures.length > 0 && popupState.lastListCoordinate) {
         
-        // Determine a display ID based on type
-        let displayId = type === 'Bridge' ? (p.structure_no || p.bridge_name) : (p.cv_structure_no || 'Unknown ID');
-        if(!displayId) displayId = "Unnamed Asset";
+        // Clear specific highlight (from single select)
+        if (typeof highlightLayer !== 'undefined') highlightLayer.getSource().clear();
+        
+        // Re-highlight ALL
+        window.multiSelectFeatures.forEach(f => {
+            const clone = f.clone();
+            const geom = clone.getGeometry();
+            if(geom) geom.transform('EPSG:4326', map.getView().getProjection());
+            highlightLayer.getSource().addFeature(clone);
+        });
 
-        html += `
-            <tr onclick="showAssetDetail(${index})" style="cursor:pointer;">
-                <td class="popup-label"><span class="road-type-badge road-type-${type === 'Bridge' ? 'jkr' : 'mcdc'}">${type}</span></td>
-                <td class="popup-value" style="text-decoration:underline; color:blue;">${displayId}</td>
-            </tr>`;
-    });
-
-    html += '</table></div>';
-
-    // Footer with Back Button
-    html += `
-        <div class="popup-footer">
-            <button class="popup-action-btn" onclick="restoreRoadView(); return false;">
-                &larr; Back to Road
-            </button>
-        </div>`;
-
-    document.getElementById('road-popup-content').innerHTML = html;
+        // Re-render the list
+        showMultiRoadList(window.multiSelectFeatures, popupState.lastListCoordinate);
+    }
 };
 
-// Function to show details of a specific asset
-window.showAssetDetail = function(index) {
-    const assetsStr = document.getElementById('road-popup-content').dataset.assets;
-    const assets = JSON.parse(assetsStr);
-    const asset = assets[index];
-    const p = asset.properties;
-    const type = p._assetType;
+// NAVIGATION & ASSET RENDERING
+window.navigatePopup = function(direction) {
+    let newIndex = popupState.currentIndex + direction;
 
-    let html = `<div class="popup-header">${type} Details</div>`;
-    let tableRows = '';
+    // Boundary checks (Prevent going below 0 or above max pages)
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= popupState.pages.length) newIndex = popupState.pages.length - 1;
 
-    // Define fields to show based on type
-    // You can adjust these keys based on your actual DB columns
-    let fields = [];
-    if (type === 'Bridge') {
-        fields = [
-            { k: 'structure_no', l: 'Structure ID' },
-            { k: 'br_type_code', l: 'Type' },
-            { k: 'br_chn_start', l: 'Start Chainage' },
-            { k: 'br_chn_end', l: 'End Chainage' },
-            { k: 'br_length', l: 'Length (m)' }
-        ];
+    popupState.currentIndex = newIndex;
+    
+    // Call the NEW renderer
+    renderPopupPage(newIndex);
+};
+
+// NEW: Function to handle direct clicks on Bridges/Culverts
+window.showAssetDirectly = function(feature, coordinate) {
+    const p = feature.getProperties();
+    
+    // 1. Identify Type (Bridge or Culvert?)
+    // We check for unique columns. 
+    // Bridges usually have 'structure_no', Culverts have 'cv_structure_no'.
+    // Or check your layer name if available.
+    let type = 'BRIDGES';
+    if (p.cv_structure_no) type = 'CULVERTS';
+    
+    // 2. Prepare Data Structure for renderPopupPage
+    // renderPopupPage expects an object with a 'properties' key
+    const assetWrapper = { properties: p };
+
+    // 3. Setup Popup State (Skip the Road page, go straight to Asset page)
+    popupState.pages = [{
+        type: type,
+        data: [assetWrapper]
+    }];
+    popupState.currentIndex = 0;
+    
+    // 4. Save Coordinate for "Street View" / "Map" buttons
+    const clickedLonLat = ol.proj.toLonLat(coordinate);
+    popupState.clickedCoordinate = { 
+        lat: clickedLonLat[1].toFixed(6), 
+        lon: clickedLonLat[0].toFixed(6) 
+    };
+
+    // 5. Render
+    renderPopupPage(0);
+    
+    // 6. Show Popup
+    const popupElement = document.getElementById('road-popup');
+    const popupOverlay = map.getOverlays().getArray().find(o => o.getElement() === popupElement);
+    
+    if(popupOverlay) popupOverlay.setPosition(coordinate);
+    popupElement.style.display = 'block';
+    lockedPopup = true;
+};
+
+// 2. The Renderer (Builds the HTML for Road OR Grouped Assets)
+function renderPopupPage(pageIndex) {
+    const page = popupState.pages[pageIndex];
+    const totalPages = popupState.pages.length;
+    let html = '';
+
+    // --- HEADER & CLOSE BUTTON ---
+    // Show (Page X of Y) only if multiple pages exist
+    const pageCounter = totalPages > 1 ? `<span style="font-size:12px; opacity:0.8; margin-left:5px;">(Layer ${pageIndex + 1} of ${totalPages})</span>` : '';
+    
+    let title = 'Road Info';
+    if (page.type === 'BRIDGES') title = `Bridges Found (${page.data.length})`;
+    if (page.type === 'CULVERTS') title = `Culverts Found (${page.data.length})`;
+
+    html += `
+        <div class="popup-header">
+            ${title} ${pageCounter}
+            <a href="#" class="ol-popup-closer" onclick="hideRoadInfo(); return false;">&times;</a>
+        </div>`;
+
+    // --- CONTENT BODY ---
+    html += `<div class="popup-table-container">`;
+
+    if (page.type === 'ROAD') {
+        // Render Single Road Table (We rebuild it from stored data to keep logic simple)
+        // Note: In the previous step we built tableRows string, but here we are re-rendering.
+        // To be cleaner, we could store the HTML string, but re-building is fine for small data.
+        // (For simplicity, I'm assuming the tableRows logic from showRoadInfo is mainly for the initial build. 
+        // Ideally, you'd store the Road HTML string in the page object to avoid rebuilding).
+        
+        // Let's grab the fields logic again or assume we passed the HTML string. 
+        // IMPROVEMENT: Let's Assume page.data contains the raw props.
+        // To save code space, let's rebuild the table here:
+        html += buildRoadTableHTML(page.data);
+        
     } else {
-        fields = [
-            { k: 'cv_structure_no', l: 'Structure ID' },
-            { k: 'cv_type_code', l: 'Type' },
-            { k: 'cv_chn_start', l: 'Start Chainage' },
-            { k: 'cv_chn_end', l: 'End Chainage' },
-            { k: 'cv_length', l: 'Length (m)' }
-        ];
+        // Render GROUPED ASSETS (Bridges/Culverts)
+        // This is the scrollable list of tables
+        // Render GROUPED ASSETS (Bridges/Culverts)
+        page.data.forEach((asset, idx) => {
+            const p = asset.properties;
+            const isBridge = (page.type === 'BRIDGES');
+            
+            // Separator line (if not the first item)
+            if (idx > 0) html += `<hr style="border:0; border-top:2px dashed #ccc; margin:15px 0;">`;
+            
+            // --- CHANGED TITLE LOGIC HERE ---
+            // Get the ID from properties
+            const idValue = isBridge ? p.structure_no : p.cv_structure_no;
+            // Determine the label text
+            const typeLabel = isBridge ? "Bridge ID" : "Culvert ID";
+            
+            // Final HTML: "Bridge ID: 13-10076-01" (We removed the loop index #1 to make it cleaner)
+            html += `<div style="font-weight:bold; color:#007bff; margin-bottom:5px; font-size:13px;">${typeLabel}: ${idValue || 'Unnamed'}</div>`;
+            // -------------------------------
+            
+            // Item Table
+            html += `<table class="popup-table">`;
+            
+            // Define fields (Including full details as requested earlier)
+            const fields = isBridge ? 
+                [
+                    {k:'br_type_code', l:'Type'}, 
+                    {k:'br_general_condition', l:'Condition'}, 
+                    {k:'br_chn_start', l:'Start Ch.'},
+                    {k:'br_chn_end', l:'End Ch.'},
+                    {k:'br_length', l:'Length (m)'}
+                ] :
+                [
+                    {k:'cv_type_code', l:'Type'}, 
+                    {k:'cv_general_condition', l:'Condition'}, 
+                    {k:'cv_chn_start', l:'Start Ch.'},
+                    {k:'cv_chn_end', l:'End Ch.'},
+                    {k:'cv_length', l:'Length (m)'}
+                ];
+
+            fields.forEach(f => {
+                let val = p[f.k];
+                if (val === null || val === undefined || val === 'null') val = '-';
+                
+                // Color Condition
+                if (f.l === 'Condition') {
+                    const c = val.toString().toLowerCase();
+                    // Simple traffic light logic
+                    const color = c === 'poor' ? '#d62222' : (c === 'fair' ? '#f0ad4e' : '#28a745');
+                    val = `<span style="color:${color}; font-weight:bold;">${val}</span>`;
+                }
+                
+                html += `<tr><td class="popup-label" style="width:40%">${f.l}</td><td class="popup-value">${val}</td></tr>`;
+            });
+            
+            html += `</table>`;
+        });
     }
 
-    fields.forEach(f => {
-        if(p[f.k]) {
-            tableRows += `<tr><td class="popup-label">${f.l}</td><td class="popup-value">${p[f.k]}</td></tr>`;
-        }
-    });
+    html += `</div>`; // End Container
 
-    html += `<div class="popup-table-container"><table class="popup-table">${tableRows}</table></div>`;
+    // --- FOOTER NAVIGATION ---
+    // Check if we have "Back List" button (Global MultiSelect)
+    const hasBackList = (window.multiSelectFeatures && window.multiSelectFeatures.length > 1 && pageIndex === 0);
+    let backListBtn = hasBackList ? `<button class="popup-action-btn" onclick="restoreMultiList();" style="background:#666; margin-right:5px;">&larr; List</button>` : '';
 
-    // Footer controls
+    let navButtons = '';
+    if (totalPages > 1) {
+        navButtons = `
+            <div style="display:flex; gap:5px;">
+                <button class="popup-action-btn" onclick="navigatePopup(-1);" ${pageIndex === 0 ? 'disabled style="opacity:0.5"' : ''}>&larr; Prev</button>
+                <button class="popup-action-btn btn-next" onclick="navigatePopup(1);" ${pageIndex === totalPages - 1 ? 'disabled style="opacity:0.5"' : ''}>Next &rarr;</button>
+            </div>`;
+    }
+
     html += `
-        <div class="popup-footer" style="display:flex; justify-content:space-between;">
-            <button class="popup-action-btn" onclick="showAssetList(); return false;">
-                &larr; List
-            </button>
-            <button class="popup-action-btn" onclick="restoreRoadView(); return false;">
-                Road Info
-            </button>
+        <div class="popup-footer" style="justify-content:space-between;">
+            <div style="display:flex; gap:5px;">
+                ${backListBtn}
+                <button class="popup-action-btn" onclick="copyRoadInfoToClipboard(this);"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            ${navButtons}
         </div>`;
 
-    document.getElementById('road-popup-content').innerHTML = html;
-};
+    popupContent.innerHTML = html;
+}
 
-// Function to go back to the main Road Info
-window.restoreRoadView = function() {
-    const roadHtml = document.getElementById('road-popup-content').dataset.roadHtml;
-    if (roadHtml) {
-        document.getElementById('road-popup-content').innerHTML = roadHtml;
+// Helper to rebuild Road Table (To keep renderPopupPage clean)
+function buildRoadTableHTML(props) {
+    const fields = [
+        { key: 'district_name', label: 'District', fallbackKey: 'district_code' },
+        { key: 'layer', label: 'Road Type' },
+        { key: 'road_name', label: 'Road Name' },
+        { key: 'pkm_road_id', label: 'PKM ID' },
+        { key: 'marris_id', label: 'Marris ID' },
+        { key: 'gis_length', label: 'Length' },
+        { key: 'total_pv_length', label: 'Maint. Length' },
+        { key: 'start_node_coord', label: 'Start Ch.' },
+        { key: 'end_node_coord', label: 'End Ch.' }
+    ];
+
+    let html = `<table class="popup-table">`;
+    fields.forEach(field => {
+        let val = props[field.key];
+        if (!val && field.fallbackKey) val = props[field.fallbackKey];
+        if (!val || val === 'null') val = '-';
+        
+        let displayValue = val;
+         if (field.key === 'layer' && val !== '-') {
+             const typeMap = {'UNID':'unid','FEDERAL':'federal','JKR':'jkr','MCDC':'mcdc','PLANTATION':'plantation','JLN KAMPUNG':'kampung','OTHER':'other'};
+             displayValue = `<span class="road-type-badge road-type-${typeMap[val] || 'other'}">${val}</span>`;
+        }
+
+        html += `<tr><td class="popup-label">${field.label}</td><td class="popup-value">${displayValue}</td></tr>`;
+    });
+    html += `</table>`;
+    return html;
+}
+// =========================================================================
+// CLICK HANDLER (Upgraded for Multi-Select + Smart Single Select)
+async function handleRoadInfoClick(evt) {
+
+    // 0. Ignore clicks inside popup
+    const targetElement = evt.originalEvent ? evt.originalEvent.target : null;
+    if (targetElement && targetElement.closest('#road-popup')) return;
+
+    // 1. Clear previous state
+    if (lockedPopup) hideRoadInfo();
+    highlightLayer.getSource().clear();
+
+    // 2. Determine Mode
+    const mode = window.currentSelectionMode || 'radius';
+    let bufferDegrees;
+    let visualRadiusMeters;
+
+    if (mode === 'precise') {
+        bufferDegrees = 0.00003;
+        visualRadiusMeters = 5;
+    } else {
+        bufferDegrees = 0.0003; // Radius Mode
+        visualRadiusMeters = 200;
     }
-};
 
-function styleRoadName(spanElement) {
-    spanElement.style.color = 'blue';
-    spanElement.style.textDecoration = 'underline';
-}
-function unstyleRoadName(spanElement) {
-    spanElement.style.color = '';
-    spanElement.style.textDecoration = '';
-}
 
-function copyRoadInfoToClipboard(linkElement) { // Changed parameter name to linkElement
+    // 3. Visual Feedback (Red Circle)
+
+    if (typeof clickRadiusSource !== 'undefined') {
+
+        clickRadiusSource.clear();
+
+        clickRadiusSource.addFeature(new ol.Feature({
+
+            geometry: new ol.geom.Circle(evt.coordinate, visualRadiusMeters)
+
+        }));
+
+        setTimeout(() => { if (clickRadiusSource) clickRadiusSource.clear(); }, 1000);
+
+    }
+
+// Make it Global by attaching to 'window'
+window.copyRoadInfoToClipboard = function(btnElement) { 
+    const popupContent = document.getElementById('road-popup-content');
+    
+    // Safety check
+    if (!popupContent) return;
+
     const textToCopy = popupContent.dataset.copyText;
     
     if (!textToCopy) {
-        alert('No road information to copy.');
+        alert('No info to copy.');
         return;
     }
 
     navigator.clipboard.writeText(textToCopy).then(() => {
-        // Provide visual feedback for a link
-        const originalText = linkElement.textContent;
-        const originalColor = linkElement.style.color;
-
-        linkElement.textContent = 'Copied';
-
-        // Reset the link after a short delay
+        // Visual Feedback
+        const originalHTML = btnElement.innerHTML;
+        btnElement.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btnElement.style.backgroundColor = '#4CAF50'; // Green
+        
+        // Reset after 1.5 seconds
         setTimeout(() => {
-            linkElement.textContent = originalText;
-            linkElement.style.color = originalColor;
-            linkElement.style.textDecoration = 'underline';
+            btnElement.innerHTML = originalHTML;
+            btnElement.style.backgroundColor = ''; // Reset color
         }, 1500);
         
     }).catch(err => {
-        console.error('Failed to copy text: ', err);
-        alert('Failed to copy road information. Please check browser permissions.');
+        console.error('Copy failed:', err);
+        alert('Failed to copy to clipboard.');
     });
-}
-
-function copyRoadNameOnly(spanElement, roadName) {
-    if (!roadName) {
-        alert('No road name to copy.');
-        return;
-    }
-
-    navigator.clipboard.writeText(roadName).then(() => {
-        const originalText = spanElement.textContent;
-        const originalColor = spanElement.style.color;
-
-        // Reset the element after a short delay
-        setTimeout(() => {
-            spanElement.textContent = originalText;
-            spanElement.style.color = originalColor;
-            spanElement.style.textDecoration = 'underline';
-        }, 1500);
-        
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-        alert('Failed to copy road name. Please check browser permissions.');
-    });
-}
-
-function hideRoadInfo() {
-    popupElement.style.display = 'none';
-    popup.setPosition(undefined);
-    lockedPopup = false;
-}
-
-popupCloser.onclick = function (evt) {
-    evt.preventDefault();
-    hideRoadInfo();
 };
 
-// =========================================================================
-// CLICK HANDLER (Ensures Asset Button Always Appears)
-// =========================================================================
-async function handleRoadInfoClick(evt) {
-    // 1. Clear existing popup/highlights if locked
-    if (lockedPopup) hideRoadInfo();
-    highlightLayer.getSource().clear();
+    // 4. FIND FEATURES
 
-    let feature = null;
+    let foundFeatures = [];
 
-    // 2. STRATEGY A: Check if we clicked an existing feature (District or Highlight)
-    const localFeature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
-       // Ignore the district layer, we only care about roads
-       if (layer && layer.get('name') === 'DistrictLayer') return null;
-       return f;
+
+
+    // Strategy A: Check Local Vector Features
+
+    map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
+
+        if (layer && (layer.get('name') === 'DistrictLayer' || layer.get('name') === 'MeasureLayer')) return null;
+
+        foundFeatures.push(f);
+
     });
 
-    if (localFeature) {
-        feature = localFeature; // Found it locally!
-    } 
-    else {
-        // 3. STRATEGY B: WFS Spatial Query (If nothing clicked locally)
+
+
+    // Strategy B: If Local failed, try WFS Radius Search
+
+    if (foundFeatures.length === 0) {
+
         const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
-        const bufferDegrees = 0.0001;
+
         const cql = `BBOX(geom, ${lon - bufferDegrees}, ${lat - bufferDegrees}, ${lon + bufferDegrees}, ${lat + bufferDegrees}, 'EPSG:4326')`;
 
-        // Query the Light Layer for geometry
-        const features = await queryWFS('gis_sabah_road_map', cql);
-        
-        // Filter by active types
-        const activeFeatures = features.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
+        const wfsFeatures = await queryWFS('gis_sabah_road_map', cql);
 
-        if (activeFeatures && activeFeatures.length > 0) {
-            feature = activeFeatures[0];
-        }
+       
+
+        // Filter active types
+
+        foundFeatures = wfsFeatures.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
+
     }
 
-    // 4. PROCESS THE FEATURE (Unified Logic)
-    if (feature) {
-        const roadId = feature.get('pkm_road_id');
 
-        // A. Fetch Heavy Attributes (The Pivot)
-        if (roadId) {
-            document.body.style.cursor = 'wait';
-            const extendedProps = await fetchExtendedAttributes(roadId);
-            document.body.style.cursor = 'default';
 
-            if (extendedProps) {
-                feature.setProperties(extendedProps);
-            }
+    // 5. PROCESS RESULTS
+
+    if (foundFeatures.length > 0) {
+
+       
+
+        // --- NEW FIX FOR SINGLE MODE ---
+
+        // If mode is Precise, force it to only keep the first feature found.
+
+        if (mode === 'precise') {
+
+            foundFeatures = [foundFeatures[0]];
+
         }
 
-        // B. Calculate Chainage Coordinates (Fallback logic)
-        let startDisplay = feature.get('start_chainage'); 
-        let endDisplay = feature.get('end_chainage');
+        // -------------------------------
 
-        if (!startDisplay || !endDisplay) {
-            const geometry = feature.getGeometry();
-            if(geometry && geometry.getType() === 'LineString') {
-                // Ensure we clone and transform safely
-                const geometryClone = geometry.clone();
-                geometryClone.transform(map.getView().getProjection(), 'EPSG:4326'); 
-                
-                const coords = geometryClone.getCoordinates();
-                if(Array.isArray(coords) && coords.length >= 2) {
-                    startDisplay = `${coords[0][1].toFixed(6)} ${coords[0][0].toFixed(6)}`;
-                    endDisplay = `${coords[coords.length - 1][1].toFixed(6)} ${coords[coords.length - 1][0].toFixed(6)}`;
-                } 
-            }
+
+
+        // A. Highlight ALL found features
+
+        foundFeatures.forEach(f => {
+
+            const clone = f.clone();
+
+            const geom = clone.getGeometry();
+
+            if (geom) geom.transform('EPSG:4326', map.getView().getProjection());
+
+            highlightLayer.getSource().addFeature(clone);
+
+        });
+
+
+
+        // B. Decide Popup Type
+
+        if (foundFeatures.length === 1) {
+
+            // Single Result -> Show Details Immediately
+
+            processSingleFeature(foundFeatures[0], evt.coordinate);
+
+        } else {
+
+            // Multiple Results -> Show List
+
+            showMultiRoadList(foundFeatures, evt.coordinate);
+
         }
-        feature.set('start_node_coord', startDisplay || 'N/A');
-        feature.set('end_node_coord', endDisplay || 'N/A');
 
-        // C. CRITICAL FIX: ALWAYS FETCH ASSETS
-        // Get click coordinates in Lat/Lon for the asset query
-        const [clickLon, clickLat] = ol.proj.toLonLat(evt.coordinate);
-        const nearbyAssets = await fetchNearbyAssets(clickLon, clickLat);
 
-        // D. Show Popup (Passing the Assets!)
-        showRoadInfo(feature, evt.coordinate, nearbyAssets);
-
-        // E. Highlight the feature
-        const roadClone = feature.clone();
-        // Ensure highlight geometry is in map projection (EPSG:3857)
-        const geom = roadClone.getGeometry();
-        if (geom) {
-
-             geom.transform('EPSG:4326', map.getView().getProjection());
-        }
-        highlightLayer.getSource().addFeature(roadClone);
 
     } else {
+
         hideRoadInfo();
+
     }
+
 }
+
+
+
+// Helper to process a single feature (Ensure it is attached to window!)
+window.processSingleFeature = async function(feature, coordinate) {
+    const roadId = feature.get('pkm_road_id');
+
+    // ... (Rest of your existing logic from your pasted code) ...
+    if (roadId) {
+       document.body.style.cursor = 'wait';
+       const extendedProps = await fetchExtendedAttributes(roadId);
+       document.body.style.cursor = 'default';
+       if (extendedProps) feature.setProperties(extendedProps);
+    }
+
+    // Chainage Logic
+    let startDisplay = feature.get('start_chainage'); 
+    let endDisplay = feature.get('end_chainage');
+    if (!startDisplay || !endDisplay) {
+       const geometry = feature.getGeometry();
+       if(geometry) {
+           const geomClone = geometry.clone().transform(map.getView().getProjection(), 'EPSG:4326');
+           const coords = geomClone.getCoordinates();
+           if(coords.length >= 2) {
+               const flatCoords = geometry.getType() === 'MultiLineString' ? coords[0] : coords;
+               startDisplay = `${flatCoords[0][1].toFixed(6)} ${flatCoords[0][0].toFixed(6)}`;
+               endDisplay = `${flatCoords[flatCoords.length - 1][1].toFixed(6)} ${flatCoords[flatCoords.length - 1][0].toFixed(6)}`;
+           }
+       }
+    }
+    feature.set('start_node_coord', startDisplay || 'N/A');
+    feature.set('end_node_coord', endDisplay || 'N/A');
+
+    // Fetch Assets
+    const [clickLon, clickLat] = ol.proj.toLonLat(coordinate);
+    const nearbyAssets = await fetchNearbyAssets(clickLon, clickLat);
+
+    // Use existing global function
+    showRoadInfo(feature, coordinate, nearbyAssets);
+};
+
 
 // =========================================================================
 // 13. LOCATE ME BUTTON 

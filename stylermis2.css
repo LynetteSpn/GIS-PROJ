@@ -24,11 +24,10 @@
 
 .ol-popup-closer {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    right:30px;
     width: 24px;
     height: 24px;
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(0,0,0, 0.2);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -79,6 +78,7 @@
 .popup-header {
     position: sticky;
     top: 0 ;
+    z-index: 10;
     background: linear-gradient(135deg, rgb(5, 61, 0) 0%, rgb(3, 45, 0) 100%);
     color: white;
     padding: 16px 20px;
@@ -511,7 +511,7 @@
     background: white;
     flex-direction: column;
     border-radius: 10px;
-    gap: 8px;
+    gap: 8px!important;
 }
 
 .optimization-btn:hover {
@@ -857,6 +857,7 @@
         padding:5px;
         font-size: 12px;
         min-height: 30px; /* Better touch target */
+        width: 100%;
     }
 
     /* Smaller icons on mobile */
