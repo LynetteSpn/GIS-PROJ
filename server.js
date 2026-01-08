@@ -1,3 +1,38 @@
+// * ============================================================================
+//  * INTELLIGENT ROUTING & ASSET API (BACKEND MIDDLEWARE)
+//  * ============================================================================
+//  * * DESCRIPTION:
+//  * This Node.js/Express server acts as the middleware between the Client 
+//  * (OpenLayers Frontend) and the Spatial Database (PostgreSQL/PostGIS).
+//  * It handles logic that is  complex for the frontend, such as pathfinding
+//  * algorithms, asset queries, and route optimization (TSP).
+//  * * CORE TECHNOLOGIES:
+//  * - Runtime: Node.js (Express Framework)
+//  * - Database: PostgreSQL with PostGIS & pgRouting extensions
+//  * - Driver: node-postgres ('pg')
+//  * * DATABASE DEPENDENCIES (Tables required):
+//  * 1. test_roads_final       -> Main road network (topology enabled).
+//  * 2. test_roads_final_vertices_pgr -> Network nodes (intersections).
+//  * 3. tbl_bridge             -> Bridge asset inventory.
+//  * 4. tbl_culvert            -> Culvert asset inventory.
+//  * * API ENDPOINTS REFERENCE:
+//  * * 1. GET /assets/critical
+//  * - Purpose: Fetches bridges/culverts with 'Poor' condition.
+//  * - Params: ?type=bridge OR ?type=culvert
+//  * * 2. GET /route/optimize (TSP)
+//  * - Purpose: Reorders a list of random stops into an optimized travel path.
+//  * - Params: ?locations=[[lon,lat], [lon,lat], ...]
+//  * - Algorithm: Nearest Neighbor (JavaScript) + Dijkstra (pgRouting).
+//  * * 3. GET /route-by-name
+//  * - Purpose: Finds a route using road names (e.g., "Jalan A" to "Jalan B").
+//  * - Params: ?start_name=...&end_name=...
+//  * - Logic: Geocodes name -> Coordinate -> Snaps to Graph -> Routing.
+//  * * 4. GET /route (Standard A-to-B)
+//  * - Purpose: Calculates shortest path between two coordinate pairs.
+//  * - Params: ?start_lon=...&start_lat=...&end_lon=...&end_lat=...
+//  * * ============================================================================
+//  */
+
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -19,6 +54,9 @@ const pool = new Pool({
 // =========================================================================
 // FEATURE 1: ASSET SCANNER (With Type Filtering)
 // =========================================================================
+// It scans for critical assets (bridges and culverts in poor condition) and 
+// returns their locations.
+
 app.get('/assets/critical', async (req, res) => {
     try {
         // Get type from URL: ?type=bridge OR ?type=culvert
@@ -61,6 +99,9 @@ app.get('/assets/critical', async (req, res) => {
 // =========================================================================
 // FEATURE 2: MULTISTOP ROUTE OPTIMIZATION 
 // =========================================================================
+// It optimizes a route given multiple locations (lat/lon pairs) using a simple
+// "Nearest Neighbor" algorithm for TSP and returns the ordered route geometry.
+
 app.get('/route/optimize', async (req, res) => {
     try {
         const locations = JSON.parse(req.query.locations);

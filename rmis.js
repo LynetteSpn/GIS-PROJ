@@ -126,27 +126,84 @@ const roadColors = {
 };
 
 // --- Highlight Style (Used for WFS-on-Demand result) ---
+// --- Highlight Style (Handles Roads AND Assets) ---
+// --- Highlight Style (Handles Roads AND Assets) ---
 function highlightRoadStyle(feature) {
-    // This style expects the feature to be a full vector feature fetched via WFS
-    const layer = feature.get('layer'); 
-    const color = roadColors[layer] || 'black';
-    const roadName = feature.get('road_name') || '';
+    // 1. Check if it is a Line (Road) or a Point (Asset)
+    const geometry = feature.getGeometry();
+    const type = geometry.getType();
 
-    return [
-        new ol.style.Style({
-            stroke: new ol.style.Stroke({ color: color, width: 3 }),
-            text: new ol.style.Text({
-                text: roadName,
-                font: 'bold 10px Calibri,sans-serif',
-                fill: new ol.style.Fill({ color: '#000' }),
-                stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
-                overflow: false,
-                placement: 'line',
-                minZoom: 14
+    // =========================================================
+    // CASE A: IT IS A ROAD (LineString / MultiLineString)
+    // =========================================================
+    if (type === 'LineString' || type === 'MultiLineString') {
+        const layer = feature.get('layer'); 
+        const color = roadColors[layer] || 'black';
+        const roadName = feature.get('road_name') || '';
+
+        return [
+            // 1. The colored road line (Base)
+            new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: color, width: 3 })
+            }),
+            // 2. The Cyan Glow (Highlight)
+            new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'rgba(0, 255, 242, 0.8)', width: 8 }),
+                text: new ol.style.Text({
+                    text: roadName,
+                    font: 'bold 12px Calibri,sans-serif',
+                    fill: new ol.style.Fill({ color: '#000' }),
+                    stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+                    placement: 'line',
+                    overflow: true,
+                    offsetY: -10
+                })
             })
-        }),
-        new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(0, 255, 242, 0.8)', width: 8 }) })
-    ];
+        ];
+    } 
+    
+    // =========================================================
+    // CASE B: IT IS AN ASSET (Point)
+    // =========================================================
+    else {
+        const p = feature.getProperties();
+        
+        // Determine if Bridge or Culvert
+        // Bridges have 'structure_no', Culverts have 'cv_structure_no'
+        const isBridge = p.structure_no || (p.layer === 'Bridge');
+        const id = isBridge ? p.structure_no : p.cv_structure_no;
+        
+        // Color: Pink for Bridge, Blue for Culvert
+        const dotColor = isBridge ? '#FF1493' : '#00FFFF';
+
+        return [
+            // 1. Large Cyan "Halo" (The Glow)
+            new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 14,
+                    fill: new ol.style.Fill({ color: 'rgba(0, 255, 242, 0.4)' }), // Transparent Cyan
+                    stroke: new ol.style.Stroke({ color: 'rgba(0, 255, 242, 1)', width: 2 })
+                })
+            }),
+            // 2. The Inner Solid Dot
+            new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 7,
+                    fill: new ol.style.Fill({ color: dotColor }), 
+                    stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+                }),
+                // 3. Label with ID above the dot
+                text: new ol.style.Text({
+                    text: id || 'Asset',
+                    font: 'bold 12px Arial',
+                    fill: new ol.style.Fill({ color: '#000' }),
+                    stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+                    offsetY: -22, // Move text up
+                    overflow: true
+                })
+            })
+        ];
+    }
 }
 
 // --- District Filter Style (Applies the highlight fill) ---
@@ -228,6 +285,46 @@ const bridgeCulvertGroup = new ol.layer.Group({
     ],
     visible:false
 });
+
+const transparentPointStyle = new ol.style.Style({
+    image: new ol.style.Circle({
+        radius: 8,  // arbitrary: needs to be >0 for click detection
+        fill: new ol.style.Fill({ color: 'rgba(255,255,255,0)' }), // fully transparent
+        stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0)', width: 0 })
+    })
+});
+
+// for lines, keep stroke: rgba(0,0,0,0) and width >0
+const transparentLineStyle = new ol.style.Style({
+    stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0)', width: 8 }) // width >0 for picking
+});
+
+
+// BRIDGE VECTOR LAYER
+const bridgeVectorLayer = new ol.layer.Vector({
+    source: new ol.source.Vector({
+        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_bridge&outputFormat=application/json',
+        format: new ol.format.GeoJSON(),
+    }),
+    style: function(feature) {
+        if (feature.getGeometry().getType() === 'Point') return transparentPointStyle;
+        return transparentLineStyle;
+    }
+});
+bridgeVectorLayer.set('name',"BridgeLayer");
+
+// CULVERT VECTOR LAYER
+const culvertVectorLayer = new ol.layer.Vector({
+    source: new ol.source.Vector({
+        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_culvert&outputFormat=application/json',
+        format: new ol.format.GeoJSON(),
+    }),
+    style: function(feature) {
+        if (feature.getGeometry().getType() === 'Point') return transparentPointStyle;
+        return transparentLineStyle;
+    }
+});
+culvertVectorLayer.set('name',"CulvertLayer");
 
 // CHAINAGE LAYER (WMS, controlled by legend)
 const chainageLayer = new ol.layer.Tile({
@@ -321,7 +418,7 @@ const routeMarkerLayer = new ol.layer.Vector({
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, lmcRoadLayer, roadLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer,chainageLayer, clickRadiusLayer, highlightLayer],
+    layers: [baseGroup, lmcRoadLayer,bridgeVectorLayer,culvertVectorLayer, roadLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer,chainageLayer, clickRadiusLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -334,6 +431,17 @@ map.on('moveend', function() {
         updateDashboardCharts();
     }
 });
+
+const scaleLineControl = new ol.control.ScaleLine({
+    target: 'my-scale-line', // <--- THIS IS THE KEY. It forces the control into your div.
+    units: 'metric',
+    bar: true,
+    steps: 2,
+    text: true,
+    minWidth: 40
+});
+
+map.addControl(scaleLineControl);
 
 // =========================================================================
 // 5. BASEMAP SWITCH LOGIC

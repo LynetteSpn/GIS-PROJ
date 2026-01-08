@@ -330,47 +330,69 @@ window.navigatePopup = function(direction) {
     renderPopupPage(newIndex);
 };
 
-// NEW: Function to handle direct clicks on Bridges/Culverts
 window.showAssetDirectly = function(feature, coordinate) {
     const p = feature.getProperties();
-    
-    // 1. Identify Type (Bridge or Culvert?)
-    // We check for unique columns. 
-    // Bridges usually have 'structure_no', Culverts have 'cv_structure_no'.
-    // Or check your layer name if available.
-    let type = 'BRIDGES';
-    if (p.cv_structure_no) type = 'CULVERTS';
-    
-    // 2. Prepare Data Structure for renderPopupPage
-    // renderPopupPage expects an object with a 'properties' key
-    const assetWrapper = { properties: p };
+    const isBridge = p.structure_no !== undefined && p.structure_no !== null;
+    let html = `<div class="popup-header">
+        ${isBridge ? "Bridge Details" : "Culvert Details"}
+        <a href="#" class="ol-popup-closer" onclick="hideRoadInfo(); return false;">&times;</a>
+    </div>
+    <div class="popup-table-container">
+      <table class="popup-table" style="width:100%">
+    `;
 
-    // 3. Setup Popup State (Skip the Road page, go straight to Asset page)
-    popupState.pages = [{
-        type: type,
-        data: [assetWrapper]
-    }];
-    popupState.currentIndex = 0;
-    
-    // 4. Save Coordinate for "Street View" / "Map" buttons
-    const clickedLonLat = ol.proj.toLonLat(coordinate);
-    popupState.clickedCoordinate = { 
-        lat: clickedLonLat[1].toFixed(6), 
-        lon: clickedLonLat[0].toFixed(6) 
-    };
+    // Define fields and label/text mapping for loop below
+    const fields = isBridge
+        ? [
+            {key:'structure_no', label: 'Bridge ID', style: 'id'},
+            {key:'br_general_condition', label: 'Condition', style: 'condition'},
+            {key:'br_type_code', label: 'Type'},
+            {key:'br_chn_start', label: 'Start Ch.'},
+            {key:'br_chn_end', label: 'End Ch.'}
+          ]
+        : [
+            {key:'cv_structure_no', label: 'Culvert ID', style: 'id'},
+            {key:'cv_general_condition', label: 'Condition', style: 'condition'},
+            {key:'cv_type_code', label: 'Type'},
+            {key:'cv_chn_start', label: 'Start Ch.'},
+            {key:'cv_chn_end', label: 'End Ch.'}
+          ];
 
-    // 5. Render
-    renderPopupPage(0);
-    
-    // 6. Show Popup
-    const popupElement = document.getElementById('road-popup');
-    const popupOverlay = map.getOverlays().getArray().find(o => o.getElement() === popupElement);
-    
-    if(popupOverlay) popupOverlay.setPosition(coordinate);
+    // Loop fields for table
+    fields.forEach(f => {
+        let content = p[f.key] || '-';
+        let tdStyle = '';
+        // Style for ID field
+        if (f.style === 'id') {
+            content = `<span style="color:#1976d2;font-weight:bold;font-size:15px;">${content}</span>`;
+        }
+        // Style for CONDITION field
+        else if (f.style === 'condition') {
+            const c = (content || '').toString().toLowerCase();
+            let color = '#1976d2', bg = '';
+            if (c === 'poor') {
+                color = '#d62222'; bg = 'background:#ffeaea;';
+            }
+            else if (c === 'fair') {
+                color = '#f0ad4e'; bg = 'background:#fff7e0;';
+            }
+            else if (c === 'good') {
+                color = '#28a745'; bg = 'background:#eaffea;';
+            }
+            content = `<span style="color:${color}; font-weight:bold; ${bg} border-radius:4px; padding:2px 10px;">${p[f.key] || '-'}</span>`;
+        }
+        html += `<tr>
+            <td class="popup-label" style="width:48%">${f.label}</td>
+            <td class="popup-value" style="width:52%">${content}</td>
+        </tr>`;
+    });
+
+    html += `</table></div>`;
+    popupContent.innerHTML = html;
+    popup.setPosition(coordinate);
     popupElement.style.display = 'block';
     lockedPopup = true;
 };
-
 // 2. The Renderer (Builds the HTML for Road OR Grouped Assets)
 function renderPopupPage(pageIndex) {
     const page = popupState.pages[pageIndex];
@@ -528,10 +550,35 @@ function buildRoadTableHTML(props) {
 // =========================================================================
 // CLICK HANDLER (Upgraded for Multi-Select + Smart Single Select)
 async function handleRoadInfoClick(evt) {
-
-    // 0. Ignore clicks inside popup
     const targetElement = evt.originalEvent ? evt.originalEvent.target : null;
     if (targetElement && targetElement.closest('#road-popup')) return;
+
+    // 1. Clear previous state
+    if (lockedPopup) hideRoadInfo();
+    if (typeof highlightLayer !== 'undefined') highlightLayer.getSource().clear();
+
+    // 2. Check if a Bridge/Culvert vector feature was clicked (PRIORITY!)
+    let assetFeature = null;
+    map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
+        // You may need to confirm your bridgeLayer/culvertLayer names
+        const props = feature.getProperties();
+        if (
+            (layer && (layer.get('name') === 'BridgeLayer' || layer.get('name') === 'CulvertLayer')) ||
+            props.structure_no || props.cv_structure_no  // Fallback if name missing
+        ) {
+            assetFeature = feature;
+            return true; // Found one, stop searching
+        }
+    });
+    if (assetFeature) {
+        window.showAssetDirectly(assetFeature, evt.coordinate);
+        return; // Do not process as road
+    }
+
+
+    // 0. Ignore clicks inside popup
+    const targetElement2 = evt.originalEvent ? evt.originalEvent.target : null;
+    if (targetElement2 && targetElement2.closest('#road-popup')) return;
 
     // 1. Clear previous state
     if (lockedPopup) hideRoadInfo();

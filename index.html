@@ -1,6 +1,34 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <style>
+        /* Force Scale Line Position */
+        .ol-scale-line {
+            position: fixed !important; /* Locks it to the screen */
+            bottom: auto !important;    /* Reset bottom */
+            
+            /* PLACE IT TOP-LEFT (Under the Search Bar) */
+            top: 140px !important;      
+            left: 10px !important;
+            
+            /* Style */
+            background: rgba(6, 44, 1, 0.6) !important;
+            padding: 5px !important;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.5);
+            z-index: 9999 !important; /* Force it on top of everything */
+        }
+
+        /* Customize the text inside */
+        .ol-scale-line-inner {
+            color: white !important;
+            font-weight: bold;
+            font-size: 12px;
+            border-color: white !important;
+        }
+    </style>
+
+
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>RMIS Basemap Switcher</title>
@@ -9,6 +37,7 @@
         <link rel="apple-touch-icon" href="icon.png">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
         <link rel="stylesheet" href="https://unpkg.com/simplebar@latest/dist/simplebar.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
         <link rel="stylesheet" href="./stylermis.css">
         <link rel="stylesheet" href="./stylermis2.css">
         <link rel="stylesheet" href="./stylermis3.css">
@@ -17,7 +46,7 @@
     <body>
         <div id="route-banner" class="route-banner"></div>
         <div id="map" class="map"></div>
-
+      
         <div class="ol-control extend-control">
             <button id="center-button" title="Extend Map">E</button>
         </div>
@@ -28,70 +57,73 @@
             <div id="road-popup-content"></div>
         </div>
 
-        <div id="selection-panel" class="selection-panel" title="Switch Selection Mode">
-            <label class="switch-wide">
-                <input type="checkbox" id="select-mode-toggle">
-                <span class="slider-text round"></span>
-            </label>
-        </div>
+      <div id="top-controls-wrapper">
+        
+            <div id="selection-panel" class="selection-panel" title="Switch Selection Mode">
+                <label class="switch-wide">
+                    <input type="checkbox" id="select-mode-toggle">
+                    <span class="slider-text round"></span>
+                </label>
+            </div>
 
-        <div id="toolbar" class="toolbar">
+            <div id="toolbar" class="toolbar">
+                <button id="minimize-toolbar" title="Minimize Toolbar">×</button>
+                <div id="toolbar-content" class="toolbar-content">
+                    
+                        <div id="toolbar-title" class="toolbar-title">Search</div>
 
-             <button id="minimize-toolbar" title="Minimize Toolbar">×</button>
-            <div id="toolbar-content" class="toolbar-content">
-                
-                    <div id="toolbar-title" class="toolbar-title">Search</div>
+                        <select id="districtFilter" title="Filter by District">
+                                <option value="" disabled selected>Select District</option>
+                                <option value="ALL">ALL DISTRICTS</option>
+                                <option value="17">Beaufort</option>
+                                <option value="08">Beluran</option>
+                                <option value="13">Keningau</option>
+                                <option value="09">Kinabatangan</option>
+                                <option value="03">Kota Belud</option>
+                                <option value="01">Kota Kinabalu</option>
+                                <option value="22">Kota Marudu</option>
+                                <option value="18">Kuala Penyu</option>
+                                <option value="05">Kudat</option>
+                                <option value="24">Kunak</option>
+                                <option value="11">Lahad Datu</option>
+                                <option value="15">Nabawan</option>
+                                <option value="02">Papar</option>
+                                <option value="21">Penampang</option>
+                                <option value="23">Pitas</option>
+                                <option value="27">Putatan</option>
+                                <option value="06">Ranau</option>
+                                <option value="07">Sandakan</option>
+                                <option value="12">Semporna</option>
+                                <option value="19">Sipitang</option>
+                                <option value="14">Tambunan</option>
+                                <option value="10">Tawau</option>
+                                <option value="28">Telupid</option>
+                                <option value="16">Tenom</option>
+                                <option value="25">Tongod</option>
+                                <option value="04">Tuaran</option>
+                            </select>
 
-                    <select id="districtFilter" title="Filter by District">
-                            <option value="" disabled selected>Select District</option>
-                            <option value="ALL">ALL DISTRICTS</option>
-                            <option value="17">Beaufort</option>
-                            <option value="08">Beluran</option>
-                            <option value="13">Keningau</option>
-                            <option value="09">Kinabatangan</option>
-                            <option value="03">Kota Belud</option>
-                            <option value="01">Kota Kinabalu</option>
-                            <option value="22">Kota Marudu</option>
-                            <option value="18">Kuala Penyu</option>
-                            <option value="05">Kudat</option>
-                            <option value="24">Kunak</option>
-                            <option value="11">Lahad Datu</option>
-                            <option value="15">Nabawan</option>
-                            <option value="02">Papar</option>
-                            <option value="21">Penampang</option>
-                            <option value="23">Pitas</option>
-                            <option value="27">Putatan</option>
-                            <option value="06">Ranau</option>
-                            <option value="07">Sandakan</option>
-                            <option value="12">Semporna</option>
-                            <option value="19">Sipitang</option>
-                            <option value="14">Tambunan</option>
-                            <option value="10">Tawau</option>
-                            <option value="28">Telupid</option>
-                            <option value="16">Tenom</option>
-                            <option value="25">Tongod</option>
-                            <option value="04">Tuaran</option>
+                        <select id="filterBy" class="filterBy" onchange="filterBy(this.value)">
+                            <option value="" disabled selected>Search By</option>
+                            <option value="road_name">Road Name</option>
+                            <option value="pkm_road_id">PKM ID</option>
+                            <option value="marris_id">Marris ID</option>
+                            <option value="zone_name">Zone Name</option>
+                            <option value="taman">Area Name</option>
+                            <option value="rdcat_code">Road Category</option>
+                            <option value="dun_code">DUN Code</option>
                         </select>
 
-                    <select id="filterBy" class="filterBy" onchange="filterBy(this.value)">
-                        <option value="" disabled selected>Search By</option>
-                        <option value="road_name">Road Name</option>
-                        <option value="pkm_road_id">PKM ID</option>
-                        <option value="marris_id">Marris ID</option>
-                        <option value="zone_name">Zone Name</option>
-                        <option value="taman">Area Name</option>
-                        <option value="rdcat_code">Road Category</option>
-                        <option value="dun_code">DUN Code</option>
-                    </select>
+                        <div class="search-wrapper"> 
+                            <input type="text" id="roadSearch" placeholder="Search ">
+                            <div id="autocomplete-list" class="autocomplete-items"></div>
+                        </div>
 
-                    <div class="search-wrapper"> 
-                        <input type="text" id="roadSearch" placeholder="Search ">
-                        <div id="autocomplete-list" class="autocomplete-items"></div>
-                    </div>
-
-                    <button id="resetButton" title="Reset Filters">Reset</button>
+                        <button id="resetButton" title="Reset Filters">Reset</button>
+                </div>
             </div>
-        </div>
+
+    </div>        
 
         <div id="side-toolbar" class="side-toolbar">
             <div id="sidebar-content" class="sidebar-content">
@@ -111,35 +143,52 @@
                 <button id="btn-route-manual" class="route-option-btn" style="color: black;">Select on Map</button>
             </div>
 
-                <div id="optimization-panel" class="optimization-panel" style="display: none; min-height: 250px; width: 280px;">
-                    <div class="optimization-header">
-                        <button id="btn-back-menu" style="display:none; background:none; border:none; color:white; cursor:pointer; font-weight:bold; margin-right:10px;">⬅</button>
-                        <span class="optimization-title" id="opt-title">Route Planner</span>
-                        <button id="btn-close-opt" class="optimization-close-btn">x</button>
-                    </div>
+<div id="optimization-panel" class="optimization-panel" style="display: none; min-height: 250px; width: 300px;">
+    
+    <div class="optimization-header">
+        <span class="optimization-title" id="opt-title">Route Planner</span>
+        <button id="btn-close-opt" class="optimization-close-btn" title="Close">x</button>
+    </div>
 
-                    <!-- Menu choices in #opt-main-menu (update markup to add these!) -->
-                <div id="opt-main-menu">
-                    <p style="font-size:12px; color:#666; margin-bottom:10px; text-align:center;">Choose route mode:</p>
-                    <button id="btn-mode-gps" class="route-option-btn" style="color: black; ">From Current Location (1 stop) </button>
-                    <button id="btn-mode-manualstart" class="route-option-btn" style="color: black;" >Manual Select Location (1 stop)</button>
-                    <button id="btn-mode-multistop" class="route-option-btn" style="color: black;">Manual Select Location (Multi-Stop)</button>
-                    <p style="font-size:12px; color:#666; margin-bottom:15px; text-align:center;">Work optimisation:</p>
-                    <button id="btn-mode-bridge" class="route-option-btn" style="color: rgb(0, 22, 145);" >Scan Critical Bridges</button>
-                    <button id="btn-mode-culvert" class="route-option-btn" style="color: rgb(109, 0, 0);" >Scan Critical Culverts</button>
+    <div id="opt-workspace" style="display: flex; flex-direction: column;">
+        
+        <div id="route-inputs-container" style="background: #fff; padding: 10px; border-bottom: 1px solid #eee;">
+            </div>
+
+        <div style="background: #fff; padding: 0 10px 10px 10px;">
+            <button id="btnAddStopRow" style="background: white; border: none; color: #007bff; padding: 5px; width: 100%; text-align: left; cursor: pointer; font-size: 12px; display: flex; align-items: center; transition: 0.2s;">
+                <div style="width: 20px; text-align: center; margin-right: 5px;">
+                    <i class="fas fa-plus-circle"></i>
                 </div>
+                <span>Add destination</span>
+            </button>
+        </div>
 
-                    <div id="opt-workspace" style="display: none; flex-direction: column; ">
-                        <div id="job-list" class="job-list-container" data-simplebar>
-                            <div class="job-list-empty"><div class="empty-text">No jobs added</div></div>
-                        </div>
-                        
-                        <div class="optimization-actions">
-                            <button id="btn-add-jobs" class="optimization-btn btn-add">+ Add Locations</button>
-                            <button id="btn-run-tsp" class="optimization-btn btn-optimize">Optimize Route</button>
-                            <button id="btn-clear-jobs" class="optimization-btn btn-clear">Clear List</button>
-                        </div>
-                    </div>
+        <div class="optimization-actions" style="margin-top: 5px; padding: 10px; border-top: 1px solid #eee;">
+            <button id="btn-calculate-route" class="optimization-btn btn-optimize" style="color: #444444;">Calculate Route</button>
+            <button id="btn-clear-all" class="optimization-btn btn-clear" style="color: #444444;">Clear</button>
+        </div>
+
+        <div id="routeStatus" style="font-size: 11px; color: #555; text-align: center; padding: 5px;"></div>
+
+        <div id="job-list" class="job-list-container" data-simplebar style="display:none; border-top: 1px solid #eee;">
+            <div class="job-list-empty"><div class="empty-text">No assets found</div></div>
+        </div>
+        
+        <div id="legacy-actions" class="optimization-actions" style="display:none;">
+            <button id="btn-run-tsp" class="optimization-btn btn-optimize">Optimize Scan</button>
+        </div>
+
+        <div id="scan-tools-menu" style="padding: 10px; border-top: 1px solid #eee; display:none;">
+            <p style="font-size: 10px; font-weight: bold; color: #999; margin-bottom: 5px;">MAINTENANCE TOOLS</p>
+            <button id="btn-mode-bridge" style="width:100%; margin-bottom:5px; color: #007bff; padding:6px; background:#e3f2fd; border:1px solid #90caf9; border-radius:4px; cursor:pointer;">Scan Critical Bridges</button>
+            <button id="btn-mode-culvert" style="width:100%; padding:6px; color: #d61525 ;background:#ffebee; border:1px solid #ef9a9a; border-radius:4px; cursor:pointer;">Scan Critical Culverts</button>
+        </div>
+
+    </div>
+</div>
+
+</div>
             </div>
 
                    
@@ -164,7 +213,7 @@
                         <div id="condition-summary"></div>
                     </div>
         <!-- Dashboard Open Button -->
-        
+        <div id="my-scale-line"></div>
 
         <div id="legend" class="legend">
             <button id="minimize-legend" title="Minimize Legend">-</button>
@@ -206,6 +255,7 @@
                     </div>
             </div>
         </div>
+
 
         <!-- PWA (PROGRESSIVE WEB APPLICATION - SERVICE WORKER) SCRIPT -->
        <script>

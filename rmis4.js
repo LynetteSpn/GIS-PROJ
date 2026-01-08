@@ -14,51 +14,41 @@ const dashboardPanel = document.getElementById('dashboard-panel');
 const dashboardOpenBtn = document.getElementById('chart-btn'); // Or 'dashboard-toggle' if you switched to slider
 const dashboardCloseBtn = document.getElementById('dashboard-close-btn');
 
-// --- 1. OPEN DASHBOARD HANDLER ---
 if (dashboardOpenBtn) {
     dashboardOpenBtn.onclick = function() {
-        // A. Show the Panel
         dashboardPanel.style.display = 'block';
-        
-        // B. Run Calculations
         updateDashboardCharts();
 
-        // C. Mobile UI Adjustments
         const tb = document.getElementById('toolbar');
-        if(window.innerWidth <= 850 && tb){
-            tb.classList.add('active-chart');
+        const wrapper = document.getElementById('top-controls-wrapper');
+        
+        if(window.innerWidth <= 500 && tb){
+            if(tb) tb.classList.add('active-chart');
+            if(wrapper) wrapper.classList.add('dashboard-active');
         }
 
-        // --- D. AUTO-ENABLE BRIDGE/CULVERT LAYER (NEW) ---
         const bcCheckbox = document.getElementById('BCCheckbox');
-        // Only turn it on if it's currently OFF
         if (bcCheckbox && !bcCheckbox.checked) {
-            bcCheckbox.checked = true; // Visually check the box
-            // Dispatch event to trigger the map layer logic in rmis.js
+            bcCheckbox.checked = true;
             bcCheckbox.dispatchEvent(new Event('change'));
         }
-        // --------------------------------------------------
     };
 }
 
-// --- 2. CLOSE DASHBOARD HANDLER ---
 if (dashboardCloseBtn) {
     dashboardCloseBtn.onclick = function() {
         dashboardPanel.style.display = 'none';
-        
-        // If using a toggle/slider, you might need to uncheck it here too
-        // if (dashboardOpenBtn.type === 'checkbox') dashboardOpenBtn.checked = false;
-        
-        if (dashboardOpenBtn.style.display === 'none') {
-             dashboardOpenBtn.style.display = 'block';
-        }
 
         const tb = document.getElementById('toolbar');
-        if (window.innerWidth <= 850 && tb) {
-            tb.classList.remove('active-chart');
+        const wrapper = document.getElementById('top-controls-wrapper');
+        
+        if (window.innerWidth <= 500) {
+            if(tb) tb.classList.remove('active-chart');
+            if(wrapper) wrapper.classList.remove('dashboard-active'); // ADD THIS LINE
         }
     };
 }
+
 
 // --- 3. CHART INITIALIZATION (Rest of your file remains the same) ---
 let assetChart, typeChart;
