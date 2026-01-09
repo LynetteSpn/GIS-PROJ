@@ -480,10 +480,10 @@ function handleGpsLocate(id) {
             }
 
             // Zoom map to user
-            // map.getView().animate({ 
-            //     center: ol.proj.fromLonLat([longitude, latitude]), 
-            //     zoom: 15, duration: 1000 
-            // });
+            map.getView().animate({ 
+                center: ol.proj.fromLonLat([longitude, latitude]), 
+                zoom: 15, duration: 1000 
+            });
         },
         (error) => {
             document.body.style.cursor = "default";
@@ -495,6 +495,50 @@ function handleGpsLocate(id) {
         { enableHighAccuracy: true, timeout: 50000 }
     );
 }
+
+// LIVE MAP INDICATORS (START/END POINTS)
+
+function updateMapIndicators() {
+    // check and ensure the layer exists
+    if (typeof routeMarkerSource === 'undefined') return;
+
+    //1. clear old markers (so they dont overlap/ piles up)
+    routeMarkerSource.clear();
+
+    //2. loop through every input in the list
+    routeStops.forEach(stop => {
+        //only draw if we have valid lat/lon
+        if (stop.lat && stop.lon) {
+            const feature = new ol.Feature({
+                geometry: new ol.geom.Point(ol.proj.fromLonLat([stop.lon, stop.lat]))
+            });
+
+            //STYLING LOGIC 
+            let color = '#007bff'; //default blue for stops
+            let radius = 6;
+            let strokeColor = 'white';
+
+            if (stop.type === 'start') {
+                color = '#28a745'; //green for start
+                radius = 8;
+            }else if (stop.type === 'end') {
+                color = '#dc3545'; //red for end
+                radius = 8;
+            }
+
+            feature.setStyle(new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: radius,
+                    fill: new ol.style.Fill({ color: color }),
+                    stroke: new ol.style.Stroke({ color: strokeColor, width: 2 })
+                })
+            }));
+
+            routeMarkerSource.addFeature(feature);
+        }
+    });
+}
+
 
 // Helper to fill an existing empty box (like the default "To" box)
 function fillExistingInput(id, data) {
@@ -525,11 +569,11 @@ function removeRouteInput(id) {
 
 
 map.on('click', function(evt) {
-    // 🛑 PRIORITY 1: MEASUREMENT TOOL
+    // PRIORITY 1: MEASUREMENT TOOL
     // If measuring, do nothing else.
     if (typeof isMeasuring !== 'undefined' && isMeasuring) return;
 
-    // 🛑 PRIORITY 2: CHECK FOR CLICKS ON MARKERS (Red Dots / Assets)
+    // PRIORITY 2: CHECK FOR CLICKS ON MARKERS (Red Dots / Assets)
     // We check if the pixel contains a feature (dot/pin)
     const feature = map.forEachFeatureAtPixel(evt.pixel, function(feat) { return feat; });
 
@@ -538,6 +582,29 @@ map.on('click', function(evt) {
 
         // A. Is it a Scanned Asset (Red Dot)?
         if (props.isAsset === true) {
+           
+            // 🛑 CHECK FOR DUPLICATES HERE
+            // We look through 'routeStops' to see if any existing stop matches this dot's coordinates
+            const alreadyExists = routeStops.some(stop => 
+                stop.lat && stop.lon &&
+                Math.abs(stop.lat - props.lat) < 0.000001 && // Compare with tiny tolerance
+                Math.abs(stop.lon - props.lon) < 0.000001
+            );
+
+            if (alreadyExists) {
+                // OPTIONAL: Feedback to user
+                if(statusMsg) {
+                    statusMsg.innerText = "Location already added!";
+                    statusMsg.style.color = "orange";
+                    setTimeout(() => statusMsg.innerText = "", 2000);
+                }
+                
+                // Shake effect on the marker to show "Already selected"
+                const originalStyle = feature.getStyle();
+                // (You can add complex animation here, or just do nothing)
+                return; // ⛔ EXIT: Don't add it again!
+            }
+            
             // Add it to our unified input list
             addRouteInput('stop', {
                 name: props.name,
@@ -746,6 +813,9 @@ async function resolveLocation(roadName, id) {
         stop.lat = coords.lat;
         stop.lon = coords.lon;
         document.getElementById(id).style.borderLeft = "3px solid #28a745"; 
+
+        updateMapIndicators();
+
     }
 }
 

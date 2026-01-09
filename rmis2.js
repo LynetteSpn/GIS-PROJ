@@ -117,8 +117,10 @@ function hideRoadInfo() {
     }
 }
 // =========================================================================
-// 13. MULTI-SELECT LIST LOGIC (The List View)
+// 13. MULTI-SELECT LIST LOGIC (The List View) 
 // =========================================================================
+// this is actually to overcome the scope issue when user click and selection of road
+// is not the one that being selected
 
 // 3. THE SELECTION HANDLER (Attached to Window)
 window.selectSpecificRoad = function(index, coordinate) {

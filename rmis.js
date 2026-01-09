@@ -663,56 +663,7 @@ async function fetchExtendedAttributes(roadId) {
     return null;
 }
 
-// async function getChainageRange(roadId) {
-//     // Layer name confirmed from your chainage WMS layer:
-//     const chainageTypeName = 'rmisv2db_prod:gis_chainage'; 
 
-//     // Filter by the unique road ID field ('pkm_road_id')
-//     const cql = `"pkm_road_id"='${roadId}'`; 
-
-//     // Build the WFS request URL
-//     const url = (
-//         'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' + 
-//         'version=1.0.0&request=GetFeature&typeName=' + chainageTypeName + '&' +
-//         'outputFormat=application/json&srsName=EPSG:4326&' +
-//         'cql_filter=' + encodeURIComponent(cql) +
-//         '&propertyname=distance' + // Request ONLY the distance field
-//         '&maxFeatures=10000&sortBy=distance&_=' + Date.now()
-//     );
-
-//     try {
-//         const response = await fetch(url);
-//         if (!response.ok) throw new Error('Chainage WFS failed');
-        
-//         const data = await response.json();
-//         // Use GeoJSON format reader to parse features
-//         const features = new ol.format.GeoJSON().readFeatures(data);
-        
-//         if (features && features.length > 0) {
-//             let minChainage = Infinity;
-//             let maxChainage = -Infinity;
-            
-//             features.forEach(f => {
-//                 // Read the 'distance' property
-//                 const val = parseFloat(f.get('distance')); 
-//                 if (!isNaN(val)) {
-//                     if (val < minChainage) minChainage = val;
-//                     if (val > maxChainage) maxChainage = val;
-//                 }
-//             });
-
-//             return {
-//                 start: minChainage !== Infinity ? minChainage : null,
-//                 end: maxChainage !== -Infinity ? maxChainage : null
-//             };
-//         }
-//         return { start: null, end: null };
-        
-//     } catch (error) {
-//         console.error("Error fetching chainage distance data:", error);
-//         return { start: null, end: null };
-//     }
-// }
 
 // =========================================================================
 // 6. ROAD SEARCH & AUTOSUGGEST LOGIC (WFS-on-Demand Re-enabled)

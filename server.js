@@ -134,7 +134,7 @@ app.get('/route/optimize', async (req, res) => {
         }
 
         // 2. SOLVE TSP (In JavaScript) - "Nearest Neighbor" Algorithm
-        // Start at the first point (User's current location or first click)
+        // Start at the first point (User's current location or first click /enhanced :user input)
         let orderedNodes = [nodes[0]]; 
         let unvisited = nodes.slice(1); // Everyone else
 

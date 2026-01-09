@@ -851,6 +851,7 @@
         max-height: 30vh;
     }
 
+    
     /* Make optimization buttons touch-friendly */
     .optimization-panel .optimization-btn{
         padding:5px;

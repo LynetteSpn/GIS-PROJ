@@ -1,17 +1,18 @@
 #dashboard-panel{
-    display: none; 
-            position: absolute; 
-            top: 100px;
-            right: 20px;
-            width: 300px;
-            min-height: 180px;
-            z-index: 1000;
-            background: rgba(6, 44, 1, 0.15);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 6px #00000022;
-            border-radius: 12px;
-            padding: 12px;
-            transition: box-shadow 0.2s;
+  display: none; 
+  position: absolute; 
+  top: 100px;
+  right: 20px;
+  width: 300px;
+  min-height: 180px;
+  z-index: 1000;
+  background: rgba(6, 44, 1, 0.15);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 6px #00000022;
+  border: 1px solid rgba(12, 63, 2, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  transition: box-shadow 0.2s;
 }
 
 #dashboard-header{
@@ -51,6 +52,253 @@
     text-align:center;
 }
 
+/* Add this inside your <style> tag */
+.autocomplete-items {
+    position: absolute;
+    border: 1px solid #d4d4d4;
+    border-bottom: none;
+    border-top: none;
+    z-index: 9999;
+    /* Position the dropdown right below the input */
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #fff;
+    max-height: 150px;
+    overflow-y: auto; /* Scroll if list is long */
+    font-size: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.autocomplete-items div {
+    padding: 8px;
+    cursor: pointer;
+    border-bottom: 1px solid #d4d4d4;
+    color: black;
+}
+
+.autocomplete-items div:hover {
+    background-color: #e9e9e9;
+}
+
+
+/* === UNIFIED ROUTE PANEL STYLING === */
+
+/* 1. The Container for Inputs */
+#route-inputs-container {
+    padding: 0 10px; /* Space on sides */
+    margin-top: 10px;
+}
+
+/* 2. Each Input Row (Flexbox for Icon - Input - Delete) */
+.route-input-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0; /* No gap, so lines connect */
+    position: relative;
+    padding-bottom: 10px; /* Space for the line */
+}
+
+/* 3. The Icon Column (Holds the Dot/Pin) */
+.route-icon-wrapper {
+    width: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-right: 8px;
+    position: relative;
+    height: 100%; /* Full height for the line */
+    min-height: 38px;
+}
+
+/* 4. The "Connecting Line" (The Magic Part) 
+   This draws a vertical dotted line between inputs */
+.route-input-row:not(:last-child) .route-icon-wrapper::after {
+    content: "";
+    position: absolute;
+    top: 24px;   /* Start below the icon */
+    bottom: -15px; /* Extend to the next row */
+    width: 2px;
+    background-image: linear-gradient(to bottom, #ccc 33%, rgba(255,255,255,0) 0%);
+    background-position: right;
+    background-size: 2px 6px; /* Dotted effect */
+    background-repeat: repeat-y;
+    z-index: 0;
+}
+
+/* 5. The Input Wrapper (Holds Input + Autocomplete) */
+.route-input-wrapper {
+    flex-grow: 1;
+    position: relative; /* For autocomplete positioning */
+}
+
+.route-input-wrapper input {
+    width: 90%;
+    padding: 8px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #333;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.route-input-wrapper input:focus {
+    border-color: #4facfe;
+    box-shadow: 0 0 0 2px rgba(79, 172, 254, 0.2);
+}
+
+/* Icons (ROUTE INPUTS STYLE) */
+.icon-circle {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #555;
+    border-radius: 50%;
+    background: transparent;
+    margin-top: 10px; /* Center with input text */
+    z-index: 1;
+    background: white;
+}
+
+.icon-pin {
+    color: #dc3545;
+    font-size: 16px;
+    margin-top: 8px;
+    z-index: 1;
+    background: white; /* Hides the line behind it */
+}
+
+.icon-stop {
+    width: 10px;
+    height: 10px;
+    background: #555; /* Solid dot for middle stops */
+    border-radius: 50%;
+    margin-top: 12px;
+    z-index: 1;
+    border: 2px solid white; 
+}
+
+/* 7. Delete Button (Small 'x') */
+.btn-delete-stop {
+    background: none !important;
+    border: none !important;
+    color: #ff0000 !important;
+    font-size: 16px;
+    margin-left: 5px;
+    cursor: pointer;
+    padding: 0 4px !important;
+}
+
+.btn-delete-stop:hover {
+    color: #a50010;
+}
+
+/* 8. Use your location button (Inside the Input) */
+.btn-locate-inside {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent !important;
+    border: none !important;
+    color: #585858 !important;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 !important;
+}
+.btn-locate-inside:hover {
+    color: #000000 !important;
+}
+
+/* === MULTI-STOP PANEL STYLING === */
+
+/* The container for the list of inputs */
+#multistop-inputs-list {
+    background-color: #f8f9fa; /* Light grey background */
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+    max-height: 220px; /* Limit height */
+    overflow-y: auto;  /* Allow scrolling if many stops */
+}
+
+/* Each row (Input + Delete Button) */
+.input-row {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin-bottom: 8px;
+    transition: background-color 0.2s;
+}
+
+/* Input Fields inside the rows */
+.input-row input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+}
+
+/* Focus effect for inputs */
+.input-row input:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* The Red "X" Delete Button */
+.input-row button {
+    margin-left: 8px;
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-weight: bold;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.input-row button:hover {
+    color: #a71d2a;
+    background-color: #ffeaea;
+    border-radius: 4px;
+}
+
+/* The Green "Add Destination" Button */
+#btnAddStopRow {
+    width: 100%;
+    padding: 10px !important;
+    margin-top: 0;
+    background-color: rgb(230, 255, 225) !important;
+    border: 1px solid #28a745 !important; /* Dashed green border */
+    color: #28a745 !important;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+#btnAddStopRow:hover {
+    background-color: #cae9cc !important; /* Light green on hover */
+}
+
+/* Ensure Autocomplete List sits on top */
+.autocomplete-items {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    border: none;
+    border-top: none;
+    background-color: #fff;
+    max-height: 150px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
 @media (max-width: 800px){
     .toolbar-content.active-chart {
     position: middle;
@@ -71,124 +319,134 @@
     margin-bottom: 4px;
   }
     #dashboard-panel{
-    display: none; 
-                position: absolute; 
-                top: 50px;
-                right: 10px;
-                width: 200px;
-                min-height: 240px;
-                z-index: 1000;
-                background: rgba(6, 44, 1, 0.15);
-                box-shadow: 0 2px 6px #00000022;
-                backdrop-filter: blur(10px);
-                border-radius: 12px;
-                padding: 15px 15px 10px 15px;
-                transition: box-shadow 0.2s;
+      display: none; 
+      position: absolute; 
+      top: 50px;
+      right: 10px;
+      width: 200px;
+      min-height: 240px;
+      z-index: 1000;
+      background: rgba(6, 44, 1, 0.15);
+      box-shadow: 0 2px 6px #00000022;
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 15px 15px 10px 15px;
+      transition: box-shadow 0.2s;
     }
 
-      .toolbar.active-chart{
-     bottom: auto;
-    top: 10px;
-    left: 35%;
-    width: 150px;
-  }
+    .toolbar.active-chart{
+        bottom: auto;
+        top: 10px;
+        left: 35%;
+        width: 150px;
+    }
 
 }
 
 @media (max-width: 500px){
+    /* Dashboard on the RIGHT side */
     #dashboard-panel{
-    display: none; 
-                position: absolute; 
-                top: 10px;
-                right: 5px;
-                width: 140px;
-                min-height: 300px;
-                z-index: 1000;
-                background: rgba(6, 44, 1, 0.15);
-                box-shadow: 0 2px 6px #00000022;
-                backdrop-filter: blur(10px);
-                border-radius: 12px;
-                padding: 18px 18px 12px 18px;
-                transition: box-shadow 0.2s;
+        display: none; 
+        position: fixed; 
+        top: 10px;
+        right: 5px;
+        width: 140px;
+        min-height: 300px;
+        z-index: 1002; /* Higher than everything */
+        background: rgba(6, 44, 1, 0.15);
+        box-shadow: 0 2px 6px #00000022;
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 18px 18px 12px 18px;
+        transition: box-shadow 0.2s;
     }
 
-  .toolbar.active-chart{
-    bottom: auto;
-    top: 10px;
-    left: 32%;
-    width: 130px;
-  }
-
-  .toolbar-content.active-chart {
-    position: middle;
-    align-items: middle;
-    gap: 8px;
-    width: 100%;
-  }
-
-   #districtFilter.active-chart,
-  #filterBy.active-chart,
-  .search-wrapper.active-chart,
-  #resetButton.active-chart {
-    width: 100% !important;
-  }
-  
-  .toolbar-title.active-chart {
-    font-size: 15px;
-    margin-bottom: 4px;
-  }
-}
-
-@media (max-width: 360px){
-    #dashboard-panel{
-    display: none; 
-                position: absolute; 
-                top: 5px;
-                right: 2px;
-                width: 133px;
-                height: auto;
-                z-index: 1000;
-                background: rgba(6, 44, 1, 0.15);
-                box-shadow: 0 2px 6px #00000022;
-                backdrop-filter: blur(10px);
-                border-radius: 12px;
-                padding: 15px 12px 10px 12px;
-                transition: box-shadow 0.2s;
+    /* When dashboard is active, move wrapper to the LEFT */
+    #top-controls-wrapper.dashboard-active {
+        left: 5px !important;
+        right: auto !important;
+        transform: none !important;
+        width: calc(100% - 155px) !important; /* Screen width minus (dashboard 140px + gap 15px) */
+        max-width: 200px !important;
     }
 
-  .toolbar.active-chart{
-    bottom: auto;
-    top: 10px;
-    left: 33%;
-    width: 110px;
-  }
+    /* Toolbar adjustments when dashboard is active */
+    .toolbar.active-chart {
+        flex: 1 1 auto;
+        max-width: 100%;
+        min-width: 90px;
+    }
 
-  .toolbar-content.active-chart {
-    position: middle;
-    align-items: middle;
-    gap: 8px;
-    width: 100%;
-  }
+    .toolbar-content.active-chart {
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        width: 100%;
+    }
 
-   #districtFilter.active-chart,
-  #filterBy.active-chart,
-  .search-wrapper.active-chart,
-  #resetButton.active-chart {
-    width: 100% !important;
-  }
-  
-  .toolbar-title.active-chart {
-    font-size: 14px;
-    margin-bottom: 4px;
-  }
+    #districtFilter.active-chart,
+    #filterBy.active-chart,
+    .search-wrapper.active-chart,
+    #resetButton.active-chart {
+        width: 100% !important;
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+    
+    .toolbar-title.active-chart {
+        font-size: 12px !important;
+        margin-bottom: 4px;
+    }
 
-  .toolbar.minimized.active-chart {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    /* Hide or minimize the selection panel when dashboard is active */
+    #top-controls-wrapper.dashboard-active #selection-panel {
+        display: none; /* Or set width to 0 if you want to keep it */
+    }
 }
+
+@media (max-width: 370px){
+    #dashboard-panel{
+        display: none; 
+        position: absolute; 
+        top: 5px;
+        right: 2px;
+        width: 133px;
+        height: auto;
+        z-index: 1000;
+        background: rgba(6, 44, 1, 0.15);
+        box-shadow: 0 2px 6px #00000022;
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 15px 12px 10px 12px;
+        transition: box-shadow 0.2s;
+      }
+
+    .toolbar.active-chart{
+      bottom: auto;
+      top: 0px;
+      left: -4%;
+      flex: 0 0 auto !important; /* Stop it from stretching (overrides flex: 1) */
+      width: 130px !important;    /* Force the width */
+      min-width: 0 !important;   /* Allow it to be small */
+    }
+
+    .toolbar-content.active-chart {
+      position: middle;
+      align-items: middle;
+      gap: 8px;
+      width: auto;
+    }
+
+    #districtFilter.active-chart,
+    #filterBy.active-chart,
+    .search-wrapper.active-chart,
+    #resetButton.active-chart {
+      width: 100% !important;
+    }
+    
+    .toolbar-title.active-chart {
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
 }
