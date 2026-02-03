@@ -1,8 +1,8 @@
-# 🗺️ RMIS - Road Maintenance Information System
+# RMIS - Road Maintenance Information System
 
 RMIS is a comprehensive web-based geospatial platform designed for managing road assets, monitoring defects (potholes), and optimizing maintenance routing. It integrates a high-performance OpenLayers frontend with a robust Node.js and PostGIS backend to deliver real-time insights and decision support.
 
-## 📂 Project Structure
+## Project Structure
 
 ### **1. Core Frontend (HTML & Configuration)**
 | File | Description |
