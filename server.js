@@ -1,43 +1,3 @@
-// * ============================================================================
-// * INTELLIGENT ROUTING & ASSET API (BACKEND MIDDLEWARE)
-// * ============================================================================
-// * * DESCRIPTION:
-// * This Node.js/Express server acts as the middleware between the Client 
-// * (OpenLayers Frontend) and the Spatial Database (PostgreSQL/PostGIS).
-// * It handles logic that is complex for the frontend, such as pathfinding
-// * algorithms, asset queries, and route optimization (TSP).
-
-// * * CORE TECHNOLOGIES:
-// * - Runtime: Node.js (Express Framework)
-// * - Database: PostgreSQL with PostGIS & pgRouting extensions
-// * - Driver: node-postgres ('pg')
-// * * DATABASE DEPENDENCIES (Tables required):
-// * 1. gis_sabah_road_pgr_final      -> Main road network (topology enabled).
-// * 2. gis_sabah_vertices            -> Network nodes (intersections).
-// * 3. tbl_bridge                    -> Bridge asset inventory.
-// * 4. tbl_culvert                   -> Culvert asset inventory.
-
-// * * API ENDPOINTS REFERENCE:
-// * * 1. GET /assets/critical
-// * - Purpose: Fetches bridges/culverts with 'Poor' condition.
-// * - Params: ?type=bridge OR ?type=culvert
-
-// * * 2. GET /route/optimize (TSP)
-// * - Purpose: Reorders a list of random stops into an optimized travel path.
-// * - Params: ?locations=[[lon,lat], [lon,lat], ...]
-// * - Algorithm: Nearest Neighbor (JavaScript) + Dijkstra (pgRouting).
-
-// * * 3. GET /route-by-name
-// * - Purpose: Finds a route using road names (e.g., "Jalan A" to "Jalan B").
-// * - Params: ?start_name=...&end_name=...
-// * - Logic: Geocodes name -> Coordinate -> Snaps to Graph -> Routing.
-
-// * * 4. GET /route (Standard A-to-B)
-// * - Purpose: Calculates shortest path between two coordinate pairs.
-// * - Params: ?start_lon=...&start_lat=...&end_lon=...&end_lat=...
-// * ============================================================================
-// */
-
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -487,12 +447,9 @@ try {
     };
 
     https.createServer(httpsOptions, app).listen(port, () => {
-        console.log(`✅ SECURE API LISTENING: https://${SERVER_IP}:${port}`);
-        console.log(`   (Remember to accept the self-signed certificate in your browser first!)`);
+        console.log(` SECURE API LISTENING: https://${SERVER_IP}:${port}`);
     });
 
 } catch (err) {
     console.error("❌ SSL ERROR: Could not find key.pem or cert.pem.");
-    console.error("   Run this command in Git Bash to generate them:");
-    console.error("   openssl req -nodes -new -x509 -keyout key.pem -out cert.pem -days 365");
 }
