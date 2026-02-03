@@ -29,21 +29,7 @@ html, body {
     z-index: 1000;
 }
 
-/* 1. The Floating Container */
-.selection-panel {
-    position: absolute;
-    top: 15px;
-    right: 11%; /* Adjust based on toolbar width */
-    background: rgba(6, 44, 1, 0.15);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(12, 63, 2, 0.3);
-    padding: 6px;
-    border-radius: 10px; /* Pill shape container */
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-}
+
 
 /* 2. The Switch Box (Wider now to fit text) */
 .switch-wide {
@@ -116,21 +102,46 @@ input:checked + .slider-text:after {
     right: auto;
 }
 
-/* Top toolbar container */
-.toolbar {
+#top-controls-wrapper{
   position: absolute;
   top: 15px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
-  background: rgba(6, 44, 1, 0.15);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  padding: 12px 20px;
-  border-radius: 12px;
-  border: 1px solid rgba(12, 63, 2, 0.3);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  z-index:1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3 ease;
+  width:auto;
+  pointer-events: none;
+}
+
+#top-controls-wrapper > * {
+    pointer-events: auto;
+}
+
+/* Top toolbar container */
+.toolbar {
+    /* REMOVED: position: absolute, transform, left/right */
+    position: relative; 
+    display: flex;
+    align-items: center;
+    
+    /* Style & Glassmorphism */
+    background: rgba(6, 44, 1, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(12, 63, 2, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    
+    /* Animation settings */
+    transition: all 0.3s ease;
+    
+    /* Default Width */
+    width: auto; 
+    min-width: 300px; /* Force it wide when open */
 }
 
 .toolbar:hover {
@@ -146,13 +157,25 @@ input:checked + .slider-text:after {
 }
 
 .toolbar.minimized {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 20%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    min-width: 0; /* Allow it to shrink */
+    width: 40px;
+    height: 40px;
+    padding: 0;   /* Remove padding so it's a tight circle/square */
+    border-radius: 12px;
+    justify-content: center;
+}
+
+#selection-panel {
+    position: relative;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    padding: 6px;
+    border-radius: 10px;
+    background: rgba(6, 44, 1, 0.15);
+    border: 1px solid rgba(12, 63, 2, 0.3);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    backdrop-filter: blur(10px);
 }
 
 .toolbar.minimized .toolbar-content {
@@ -508,97 +531,119 @@ input:checked + .slider-text:after {
   background-color: rgba(76, 175, 80, 0.1);
 }
 
+/* Position the Container Div */
+#my-scale-line {
+    position: fixed; /* Locks it to the screen */
+    top: 90px;      /* Position it exactly where you want */
+    right: 90px;
+    
+    /* Optional: Add background to the container itself */
+    background: rgba(6, 44, 1, 0.6);
+    padding: 5px;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* Fix the text color inside */
+#my-scale-line .ol-scale-line-inner {
+    color: white !important;
+    border-color: white !important;
+    font-weight: bold;
+}
+
+/* Remove default OpenLayers background since we added it to the parent */
+#my-scale-line .ol-scale-line {
+    background: none !important;
+    padding: 0 !important;
+    position: static !important; /* Stop OL from trying to position it */
+}
+
+
 /* Medium screens - start stacking toolbar items */
 @media (max-width: 1000px) {
-  .toolbar-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    width: 280px;
-  }
 
-  .toolbar-title {
-    width: 100%;
-    text-align: center;
-    margin-bottom: 4px;
-  }
+    /* 1. WRAPPER: Side-by-Side (Row) + Top Aligned */
+    #top-controls-wrapper {
+        flex-direction: row;       /* Keep them side-by-side */
+        align-items: flex-start;   /* CRITICAL: Align to TOP, not center */
+        /* Centering Logic */
+        left: 50%;
+        transform: translateX(-50%);
+        flex-direction: row-reverse;
+        gap: 10px;
+        width: auto;
+    }
 
-    .toolbar-content.active-chart {
-    position: middle;
-    align-items: middle;
-    gap: 8px;
-    width: 100%;
-  }
+    /* 2. SLIDER PANEL: Fix the "Higher/Lower" issue */
+    #selection-panel {
+        margin-top: 0; 
+        /* Ensure it doesn't shrink awkwardly */
+        height: 40px; 
+        box-sizing: border-box;
+    }
 
-   #districtFilter.active-chart,
-  #filterBy.active-chart,
-  .search-wrapper.active-chart,
-  #resetButton.active-chart {
-    width: 100% !important;
-  }
-  
-  .toolbar-title.active-chart {
-    font-size: 15px;
-    margin-bottom: 4px;
-  }
+    /* 3. TOOLBAR: Allow vertical growth */
+    .toolbar {
+        /* Remove left/right positioning, let wrapper handle it */
+        left: auto;
+        right: auto;
+        transform: none;
+        
+        height: auto; /* Allow expanding */
+        min-height: 40px; /* Ensure matches slider when minimized */
+        padding: 10px;
+        
+        /* Prevent it from hitting the slider if screen is too narrow */
+        max-width: 60vw; 
+    }
 
-  /* Make all toolbar controls same width */
-  #districtFilter,
-  #filterBy,
-  .search-wrapper,
-  #resetButton {
-    width: 100% !important;
-  }
+    /* 4. TOOLBAR CONTENT: Stack vertically */
+    .toolbar-content {
+        flex-direction: column;
+        align-items: stretch; /* Stretch inputs to full width */
+        gap: 8px;
+        width: 100%; /* Slightly narrower to fit slider on small screens */
+    }
 
-  .filter select,
-  .toolbar select,
-  .toolbar input[type="text"] {
-    width: 100%;
-  }
+    /* --- VISUAL TWEAKS --- */
+    
+    .toolbar-title {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 4px;
+    }
 
-  #searchContainer {
-    width: 240px;
-    top: 10px;
-    right: 10px;
-  }
+    /* Standardize Widths */
+    #districtFilter,
+    #filterBy,
+    .search-wrapper,
+    #resetButton,
+    .filter select,
+    .toolbar select,
+    .toolbar input[type="text"] {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
 
-  #legend-toggle-btn {
-    display: none; /* Hidden by default */
+    /* Search Result Fix */
+    #searchContainer {
+        width: 100%;
+        position: relative;
+        top: 0; right: 0;
+    }
+
+    #legend-toggle-btn { display: none; }
 }
 
-} 
-
-/* Tablet breakpoint - keep toolbar at top */
-@media (max-width: 750px) {
-  .toolbar {
-    top: 15px; /* keep at top */
-    max-width: 100%;
-  }
-
-  .toolbar-content {
-    width: 100%;
-  }
-
-  #searchContainer {
-    width: 200px;
-    top: 10px;
-    right: 10px;
-  }
-
-  #legend-toggle-btn {
-    display: none; /* Hidden by default */
-}
-
-}
 
 /* Mobile breakpoint - only move to bottom on very small screens */
-@media (max-width: 500px) {
-  .extend-control {
+@media (max-width: 500px) {  
+   .extend-control {
         top: 4.5em !important;
         left: 0.5em !important;
     }
 
-  /* Move search to bottom */
   #searchContainer {
     top: 15px;
     bottom: auto;
@@ -609,15 +654,12 @@ input:checked + .slider-text:after {
     max-width: 200px;
   }
 
-
    #coords {
         /* Move it UP so it sits above the sidebar buttons & route panel */
-        bottom: 80px; 
-        
+        bottom: 80px;
         /* Keep it centered */
         left: 50%;
         transform: translateX(-50%);
-        
         /* Make it slightly smaller/cleaner for mobile */
         font-size: 11px;
         color: white;
@@ -625,35 +667,98 @@ input:checked + .slider-text:after {
         background-color: rgba(15, 102, 12, 0.15);
     }
 
-    .selection-panel{
-      top: 100px;
-      left: 10px;
-      
+    /* 1. WRAPPER: Force Side-by-Side (Row) */
+    #top-controls-wrapper {
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        
+        width: 95%; /* Use almost full screen width */
+        max-width: none; /* Remove any desktop limits */
+        
+        display: flex;
+        flex-direction: row-reverse;     /* <--- FORCE ROW */
+        align-items: flex-start; /* Align to TOP edge */
+        gap: 8px;
+        
+        pointer-events: none;
     }
 
-  /* Move toolbar above search */
-  .toolbar {
-    bottom: auto;
-    top: 10px;
-    left: 50%;
-    right:20px;
-    transform: translateX(-50%);
-    width: calc(100% - 120px);
-    max-width: 50%;
-    padding: 12px 16px;
-  }
+    #top-controls-wrapper > * {
+        pointer-events: auto;
+    }
 
-  .toolbar-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    width: 100%;
-  }
+    /* 2. TOOLBAR: Smart Resizing */
+    .toolbar {
+        position: relative;
+        left: auto; right: auto; transform: none;
+        /* Flex: 1 means "Take up all space NOT used by the slider" */
+        flex: 0 0 50%; 
+        /* Allow it to shrink very small if needed */
+        min-width: 0; 
+        width: auto;
+        height: auto;
+        padding: 10px;
+        transition: all 0.3s ease;
+    }
 
-  .toolbar-title {
-    font-size: 15px;
-    margin-bottom: 4px;
-  }
+    /* Minimized State */
+    .toolbar.minimized {
+        flex: 0 0 40px; /* Lock width to 40px when minimized */
+        width: 40px !important;
+        height: 40px !important;
+        padding: 0 !important;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* 3. SLIDER PANEL: Fixed Size */
+    #selection-panel {
+        position: relative;
+        right: auto; top: auto;
+        
+        /* Don't let the toolbar squash the slider */
+        flex-shrink: 0; 
+        
+        /* Visual alignment: Toolbar has padding, so we might need 
+           to push this down slightly to align tops perfectly */
+        margin-top: 0px; 
+    }
+
+    /* 4. TOOLBAR CONTENT: Stack vertically inside the bar */
+    /* This allows the inputs to fit in the narrower space */
+    .toolbar-content {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        gap: 8px;
+    }
+    
+    .toolbar.minimized .toolbar-content {
+        display: none !important;
+    }
+    /* 4. SLIDER: Center it under the toolbar */
+    #selection-panel {
+        position: relative;
+        right: auto; 
+        top: auto;
+        margin-top: 0;
+        justify-content: center;
+        width: auto;
+    }
+    
+    /* 5. TOOLBAR CONTENT */
+    .toolbar-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    /* Hide content when minimized */
+    .toolbar.minimized .toolbar-content {
+        display: none !important;
+    }
 
   /* Move side toolbar to bottom */
   .side-toolbar {

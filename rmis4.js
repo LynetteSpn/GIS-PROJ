@@ -2,17 +2,23 @@
  * RMIS 4.0 - Advanced Analytics & Geospatial Dashboard
  * =========================================================================
  * * CORE FEATURES:
- * 1. DASHBOARD ANALYTICS (Chart.js):
+ * 1. DASHBOARD ANALYTICS (Chart.js): 
  * - Real-time "Viewport-Driven" aggregation (calculates stats for visible map area).
  * - Visualizes Asset Condition (Doughnut) and Asset Inventory (Bar).
  * - bridges and culverts only.
  * - Responsive UI: Floating panel with mobile toolbar adjustments.
+ * 
+ * BECAUSE ANOTHER ASSET DATA WILL BE APPLY HERE, THERE WILL BE CHANGES NEEDED
+ * ADD OPTION AFTER CLICKING THE DATA CHARTS ICON, 2 TYPPES OF ASSET TO BE SELECTED 
+ * 1. BRIDGES AND CULVERTS
+ * 2. ROADS DEFECTS
+ * 
  * =========================================================================
  */
-
 const dashboardPanel = document.getElementById('dashboard-panel');
 const dashboardOpenBtn = document.getElementById('chart-btn'); // Or 'dashboard-toggle' if you switched to slider
 const dashboardCloseBtn = document.getElementById('dashboard-close-btn');
+
 
 if (dashboardOpenBtn) {
     dashboardOpenBtn.onclick = function() {
@@ -142,12 +148,12 @@ async function getVisibleAssets(extent) {
 
     // WFS config for both types
     const layers = [
-        { type: 'Bridge', url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        { type: 'Bridge', url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&` +
             'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_bridge&outputFormat=application/json&' +
             'cql_filter=' + encodeURIComponent(bboxCql(min, max)) + 
             '&maxFeatures=1000&_=' + Date.now()
         },
-        { type: 'Culvert', url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        { type: 'Culvert', url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&` +
             'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_culvert&outputFormat=application/json&' +
             'cql_filter=' + encodeURIComponent(bboxCql(min, max)) + 
             '&maxFeatures=1000&_=' + Date.now()

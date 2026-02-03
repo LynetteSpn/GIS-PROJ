@@ -19,7 +19,7 @@
  * - Mode switching (Standard vs. Optimization).
  * 
  * 5. GPS INTEGRATION: Real-time geolocation for start points.
- * * DEPENDENCIES: OpenLayers (ol), Backend API (Port 3000), rmis.js (Base map).
+ * * DEPENDENCIES: OpenLayers (ol), Backend API (Port 3005), rmis.js (Base map).
  * =========================================================================
  */
 
@@ -34,7 +34,10 @@ let currentUserLocation = null;
 // Optimization (Job Planner) State
 let isAddingJobs = false;
 let jobList = []; // Stores: [{lon, lat}, {lon, lat}...]
-let currentOptMode = 'manual'; //'manual,'bridge','culvert'
+let currentOptMode = 'manual'; //'manual,'bridge','culvert'  
+
+// NETWORK CONFIGURATION
+
 
 // --- DOM ELEMENTS ---
 const plannerBtn = document.getElementById('planner-btn');
@@ -251,7 +254,7 @@ window.routeToPopupLocation = function(destLon, destLat) {
 // =========================================================================
 async function getRoute(start, end) {
     if (typeof routeSource !== 'undefined') routeSource.clear();
-    const apiUrl = `http://10.1.4.18:3000/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
+    const apiUrl = `http://${SERVER_IP}:3005/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
     try {
         const response = await fetch(apiUrl);
         const routeData = await response.json(); 
@@ -700,7 +703,7 @@ async function scanAssets(type) {
     statusMsg.innerText = "Scanning...";
 
     try {
-        const r = await fetch(`http://10.1.4.18:3000/assets/critical?type=${type}`);
+        const r = await fetch(`http://${SERVER_IP}:3005/assets/critical?type=${type}`);
         const assets = await r.json();
         
         if(assets && assets.length > 0) {
@@ -772,7 +775,7 @@ if(btnCalculate) {
 
 async function runUnifiedOptimization(stops) {
     const coordsArray = stops.map(s => [s.lon, s.lat]);
-    const apiUrl = `http://10.1.4.18:3000/route/optimize?locations=${JSON.stringify(coordsArray)}`;
+    const apiUrl = `http://${SERVER_IP}:3005/route/optimize?locations=${JSON.stringify(coordsArray)}`;
     
     try {
         const resp = await fetch(apiUrl);
@@ -843,7 +846,7 @@ async function fetchRoadSuggestions(searchText, listElement, inputElement, onSel
     try {
         const viewName = "rmisv2db_prod:gis_sabah_road_map"; // CHECK THIS NAME!
         const cql = `road_name ILIKE '%${searchText}%'`;
-        const url = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${viewName}&outputFormat=application/json&propertyName=road_name&cql_filter=${encodeURIComponent(cql)}&maxFeatures=5`;
+        const url = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${viewName}&outputFormat=application/json&propertyName=road_name&cql_filter=${encodeURIComponent(cql)}&maxFeatures=5`;
 
         const r = await fetch(url);
         const d = await r.json();
@@ -875,7 +878,7 @@ async function fetchRoadSuggestions(searchText, listElement, inputElement, onSel
 async function fetchRoadGeometry(roadName) {
     const viewName = "rmisv2db_prod:gis_sabah_road_map";
     const cql = `road_name ILIKE '${roadName}'`;
-    const url = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${viewName}&outputFormat=application/json&cql_filter=${encodeURIComponent(cql)}&maxFeatures=1`;
+    const url = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${viewName}&outputFormat=application/json&cql_filter=${encodeURIComponent(cql)}&maxFeatures=1`;
 
     try {
         const r = await fetch(url);

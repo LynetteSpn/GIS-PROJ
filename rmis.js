@@ -23,6 +23,10 @@
  */
 
 let currentSearchField = 'road_name'; // Default search field
+//pothole layer
+let potholeLayer; // Define globally
+
+
 const filterOptions = {
     'road_name': 'Road Name',
     'pkm_road_id': 'PKM ID',
@@ -38,6 +42,10 @@ let currentDistrict = "ALL";
 // Keep track of which road types are currently active (toggled ON)
 let activeRoadTypes = new Set(); 
 let lastSearchResults = []; // Store last search results for zooming
+const SERVER_IP="10.1.4.27"; // Update this to your server's IP address
+const GEOSERVER_HOST=`http://${SERVER_IP}:8080`;
+
+
 
 // =========================================================================
 // 1. BASE LAYERS
@@ -125,8 +133,29 @@ const roadColors = {
     'FEDERAL': 'purple'
 };
 
+
+// --- Pothole Style (Red Dot) ---
+const potholeStyle = function(feature) {
+    // Get the specific name (e.g., "Pothole with Crack")
+    const specificType = feature.get('name'); 
+    
+    // Find out which "Bucket" it belongs to (e.g., "Surface")
+    const category = getDefectCategory(specificType);
+    
+    // Get the color for that bucket
+    const color = CATEGORY_COLORS[category];
+
+    return new ol.style.Style({
+        image: new ol.style.Circle({
+            radius: 6,
+            fill: new ol.style.Fill({ color: color }),
+            stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+        })
+    });
+};
+
+
 // --- Highlight Style (Used for WFS-on-Demand result) ---
-// --- Highlight Style (Handles Roads AND Assets) ---
 // --- Highlight Style (Handles Roads AND Assets) ---
 function highlightRoadStyle(feature) {
     // 1. Check if it is a Line (Road) or a Point (Asset)
@@ -220,9 +249,16 @@ function districtFilterStyle(feature) {
 // =========================================================================
 // 3. OVERLAY LAYERS
 // =========================================================================
+
+const currentUser = JSON.parse(sessionStorage.getItem('user')) || { role: 'guest', username: 'guest' };
+const userRole = currentUser.role || 'guest';
+// Ensure we have a valid array, even if permissions are missing
+const userDistricts = (currentUser.permissions && currentUser.permissions.allowedDistricts) ? currentUser.permissions.allowedDistricts : [];
+
+
 // WMS ROAD LAYER (FAST VISUALIZATION - Now handles display at all zoom levels)
 const roadLayerSource = new ol.source.TileWMS({
-    url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+    url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
     params: {
         'LAYERS': 'rmisv2db_prod:gis_sabah_road_map',
         'STYLES': 'road_style',
@@ -241,7 +277,7 @@ roadLayer.set('name', 'RoadLayer');
 
 //CULVERT LAYER
 const culvertLayerSource = new ol.source.TileWMS({
-    url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+    url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
     params : {
         'LAYERS' : 'rmisv2db_prod:tbl_culvert',
         'TILED' : true,
@@ -259,7 +295,7 @@ culvertLayer.set('name',"CulvertLayer");
 
 //BRIDGES LAYER
 const bridgeLayerSource = new ol.source.TileWMS({
-    url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+    url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
     params : {
         'LAYERS' : 'rmisv2db_prod:tbl_bridge',
         'TILED' : true,
@@ -286,6 +322,50 @@ const bridgeCulvertGroup = new ol.layer.Group({
     visible:false
 });
 
+
+
+// SCENARIO A: ADMIN (WMS - High Performance)
+if (userRole === '06' || userRole === '16') {
+    
+    potholeLayer = new ol.layer.Tile({
+        source: new ol.source.TileWMS({
+            // Use the SQL View you created in GeoServer
+            url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
+            params: {
+                'LAYERS': 'rmisv2db_prod:gis_sql_view_potholes', // Check your layer name!
+                'STYLES': '', // Use default style you set in GeoServer
+                'TILED': true
+            },
+            serverType: 'geoserver'
+        }),
+        visible: false // Hidden by default, toggle via Legend
+    });
+
+// SCENARIO B: INSPECTOR (Vector - Interactive)
+} else {
+
+    potholeLayer = new ol.layer.Vector({
+        source: new ol.source.Vector({
+            // 1. The URL Function
+            url: function(extent) {
+                 const distList = userDistricts.join(','); 
+                 // Ensure Port 3005 and HTTPS are correct
+                 return `https://10.1.4.27:3005/assets/potholes?districts=${distList}`;
+            }, // <--- MAKE SURE THIS COMMA IS HERE!
+            
+            // 2. The Format (This fixes the projection)
+            format: new ol.format.GeoJSON({
+                featureProjection: 'EPSG:3857' 
+            })
+        }), // <--- Close Source
+        
+        style: potholeStyle,
+        visible: false 
+    }); // <--- Close Layer
+}
+potholeLayer.set('name', 'PotholeLayer');
+
+
 const transparentPointStyle = new ol.style.Style({
     image: new ol.style.Circle({
         radius: 8,  // arbitrary: needs to be >0 for click detection
@@ -293,6 +373,7 @@ const transparentPointStyle = new ol.style.Style({
         stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0)', width: 0 })
     })
 });
+
 
 // for lines, keep stroke: rgba(0,0,0,0) and width >0
 const transparentLineStyle = new ol.style.Style({
@@ -303,7 +384,7 @@ const transparentLineStyle = new ol.style.Style({
 // BRIDGE VECTOR LAYER
 const bridgeVectorLayer = new ol.layer.Vector({
     source: new ol.source.Vector({
-        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_bridge&outputFormat=application/json',
+        url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_bridge&outputFormat=application/json`,
         format: new ol.format.GeoJSON(),
     }),
     style: function(feature) {
@@ -316,7 +397,7 @@ bridgeVectorLayer.set('name',"BridgeLayer");
 // CULVERT VECTOR LAYER
 const culvertVectorLayer = new ol.layer.Vector({
     source: new ol.source.Vector({
-        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_culvert&outputFormat=application/json',
+        url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:tbl_culvert&outputFormat=application/json`,
         format: new ol.format.GeoJSON(),
     }),
     style: function(feature) {
@@ -327,12 +408,13 @@ const culvertVectorLayer = new ol.layer.Vector({
 culvertVectorLayer.set('name',"CulvertLayer");
 
 // CHAINAGE LAYER (WMS, controlled by legend)
-const chainageLayer = new ol.layer.Tile({
-    source: new ol.source.TileWMS({
-        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+const chainageLayer = new ol.layer.Image({
+    source: new ol.source.ImageWMS({
+        url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
         params: {
             'LAYERS': 'rmisv2db_prod:gis_chainage', 
-            'TILED': true,
+            // 'TILED': true,
+            'FORMAT': 'image/png8',
             'STYLES': 'chainage_point_style'
         },
         serverType: 'geoserver'
@@ -347,7 +429,7 @@ chainageLayer.set('name', 'ChainageLayer');
 const lmcRoadLayer = new ol.layer.Tile({
     title: 'LMC2025',
     source : new ol.source.TileWMS({
-        url: 'https://10.1.4.18/geoserver/rmisv2db_prod/wms',
+        url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
         params: {
             'LAYERS': 'rmisv2db_prod:lmc_road',
             'TILED': true,
@@ -418,7 +500,9 @@ const routeMarkerLayer = new ol.layer.Vector({
 // =========================================================================
 const map = new ol.Map({
     target: 'map',
-    layers: [baseGroup, lmcRoadLayer,bridgeVectorLayer,culvertVectorLayer, roadLayer, bridgeCulvertGroup, districtLayer, routeLayer, routeMarkerLayer,chainageLayer, clickRadiusLayer, highlightLayer],
+    layers: [baseGroup, lmcRoadLayer,bridgeVectorLayer,culvertVectorLayer,  roadLayer, 
+            bridgeCulvertGroup,potholeLayer, districtLayer, routeLayer, routeMarkerLayer,
+            chainageLayer, clickRadiusLayer, highlightLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([117.04304, 5.21470]),
         zoom: 8,
@@ -426,11 +510,11 @@ const map = new ol.Map({
     })
 });
 
-map.on('moveend', function() {
-    if (dashboardPanel.style.display === 'block') {
-        updateDashboardCharts();
-    }
-});
+// map.on('moveend', function() {
+//     if (dashboardPanel.style.display === 'block') {
+//         updateDashboardCharts();
+//     }
+// });
 
 const scaleLineControl = new ol.control.ScaleLine({
     target: 'my-scale-line', // <--- THIS IS THE KEY. It forces the control into your div.
@@ -530,7 +614,7 @@ function queryWFS(viewName, cqlFilter) {
 
     // We are requesting the geometry and attributes for filtering/highlighting
     const url = (
-        'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&` +
         'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:'+ viewName + '&' +
         'outputFormat=application/json&srsName=EPSG:4326&' +
         'cql_filter=' + encodeURIComponent(finalCql)+ // Use finalCql here
@@ -585,7 +669,7 @@ async function fetchNearbyAssets(lon, lat) {
 
     const promises = queries.map(async (q) => {
         const url = (
-            'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+            `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&` +
             'version=1.0.0&request=GetFeature&typeName=' + q.layer + '&' +
             'outputFormat=application/json&cql_filter=' + encodeURIComponent(cql) +
             '&maxFeatures=5&_=' + Date.now()
@@ -641,7 +725,7 @@ async function fetchExtendedAttributes(roadId) {
     const cql = `pkm_road_id = '${roadId}'`;
     
     const url = (
-        'https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&' +
+        `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&` +
         'version=1.0.0&request=GetFeature&' +
         'typeName=rmisv2db_prod:vw_road_map2&' + 
         'outputFormat=application/json&' +
@@ -662,8 +746,6 @@ async function fetchExtendedAttributes(roadId) {
     }
     return null;
 }
-
-
 
 // =========================================================================
 // 6. ROAD SEARCH & AUTOSUGGEST LOGIC (WFS-on-Demand Re-enabled)
@@ -751,20 +833,20 @@ async function fetchAndZoomToFeature(fieldName, fieldValue) {
     try {
         // --- STEP 1: FIND ROAD (Same as your logic) ---
         if (DIRECT_SEARCH_FIELDS.includes(fieldName)) {
-            const url = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${SPATIAL_LAYER}&outputFormat=application/json&srsName=EPSG:4326&cql_filter=${encodeURIComponent(cql)}&maxFeatures=100&_=${Date.now()}`;
+            const url = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${SPATIAL_LAYER}&outputFormat=application/json&srsName=EPSG:4326&cql_filter=${encodeURIComponent(cql)}&maxFeatures=100&_=${Date.now()}`;
             const response = await fetch(url);
             const data = await response.json();
             features = new ol.format.GeoJSON().readFeatures(data);
         } else {
             // Indirect logic (keep your existing indirect logic here)
-            const idUrl = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${ATTRIBUTE_LAYER}&outputFormat=application/json&propertyName=pkm_road_id&cql_filter=${encodeURIComponent(cql)}&maxFeatures=500&_=${Date.now()}`;
+            const idUrl = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${ATTRIBUTE_LAYER}&outputFormat=application/json&propertyName=pkm_road_id&cql_filter=${encodeURIComponent(cql)}&maxFeatures=500&_=${Date.now()}`;
             const idRes = await fetch(idUrl);
             const idData = await idRes.json();
             if (idData.features && idData.features.length > 0) {
                 const ids = [...new Set(idData.features.map(f => f.properties.pkm_road_id).filter(Boolean))];
                 if(ids.length > 0) {
                     const geomCql = `pkm_road_id IN (${ids.map(id => `'${id}'`).join(',')})`;
-                    const geomUrl = `https://10.1.4.18/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${SPATIAL_LAYER}&outputFormat=application/json&srsName=EPSG:4326&cql_filter=${encodeURIComponent(geomCql)}&_=${Date.now()}`;
+                    const geomUrl = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${SPATIAL_LAYER}&outputFormat=application/json&srsName=EPSG:4326&cql_filter=${encodeURIComponent(geomCql)}&_=${Date.now()}`;
                     const geomRes = await fetch(geomUrl);
                     const geomData = await geomRes.json();
                     features = new ol.format.GeoJSON().readFeatures(geomData);
@@ -1022,11 +1104,13 @@ const legendDiv = document.getElementById("legend");
 const roadTypeItemsContainer = document.getElementById("roadTypeItemsContainer");
 const lrmItemsContainer = document.getElementById("lrmItemsContainer");
 const BCItemsContainer = document.getElementById("BCItemsContainer");
+const potholeItemsContainer = document.getElementById("potholeItemsContainer");
 
 const toggleRoadTypesBtn = document.getElementById("toggleRoadTypes");
 const toggleChainageBtn = document.getElementById("toggleChainage");
 const toggleLMCBtn = document.getElementById("toggleLMC");
 const toggleBCBtn = document.getElementById("toggleBC");
+const togglePotholeBtn = document.getElementById("togglePothole");
 
 let mcdcChainageItem;
 let lmcRoadItem;
@@ -1057,6 +1141,55 @@ const bridgeData = {
 const culvertData = {
     type: 'Culverts',
     color: 'cyan'
+}
+
+// MASTER CATEGORY COLORS
+const CATEGORY_COLORS = {
+    'Surface':    '#d62222', // Red
+    'Drainage':   '#007bff', // Blue
+    'Vegetation': '#28a745', // Green
+    'Structure':  '#6f42c1', // Purple
+    'Slope':      '#855a28', // Brown
+    'Other':      '#6c757d'  // Gray
+};
+
+// THE LOGIC: Map specific names to Categories
+function getDefectCategory(specificType) {
+    if (!specificType) return 'Other';
+    const t = specificType.toLowerCase();
+
+    // 1. SURFACE (Red) - Anything related to holes, cracks, pavement
+    if (t.includes('pothole') || t.includes('crack') || t.includes('edge') || 
+        t.includes('delamination') || t.includes('pavement') || t.includes('reinstatement')) {
+        return 'Surface';
+    }
+
+    // 2. DRAINAGE (Blue) - Water, Blockages, Gullies
+    if (t.includes('water') || t.includes('ponding') || t.includes('block') || 
+        t.includes('silted') || t.includes('gully') || t.includes('outlet')) {
+        return 'Drainage';
+    }
+
+    // 3. VEGETATION / CLEANING (Green) - Grass, Trees, Rubbish
+    if (t.includes('grass') || t.includes('tree') || t.includes('rubbish') || 
+        t.includes('debris') || t.includes('cleaning')) {
+        return 'Vegetation';
+    }
+
+    // 4. SLOPE (Brown) - Landslides, Erosion, Soil
+    if (t.includes('landslide') || t.includes('slip') || t.includes('cave') || 
+        t.includes('scouring') || t.includes('erosion') || t.includes('earth')) {
+        return 'Slope';
+    }
+
+    // 5. STRUCTURES (Purple) - Manholes, Culverts, Bridges, Concrete
+    if (t.includes('manhole') || t.includes('culvert') || t.includes('wall') || 
+        t.includes('slab') || t.includes('grating') || t.includes('rail') || 
+        t.includes('kerb') || t.includes('joint')) {
+        return 'Structure';
+    }
+
+    return 'Other'; // Fallback for Vandalism, Accidents, etc.
 }
 
 activeRoadTypes = new Set(
@@ -1143,6 +1276,26 @@ if(toggleBCBtn && BCItemsContainer){
     });
 }
 
+if(togglePotholeBtn && potholeItemsContainer){
+    togglePotholeBtn.textContent = "+"; //default state
+    togglePotholeBtn.title = "Expand";
+
+    togglePotholeBtn.addEventListener("click", function(e){
+        e.stopPropagation();
+        const isHidden = potholeItemsContainer.style.display === "none";
+
+        if(isHidden){
+            potholeItemsContainer.style.display = "block";
+            togglePotholeBtn.textContent = "-";
+            togglePotholeBtn.title = "Collapse";
+        } else {
+            potholeItemsContainer.style.display = "none";
+            togglePotholeBtn.textContent = "+";
+            togglePotholeBtn.title = "Expand";
+        }
+    });
+}
+
 // 9A. Build the legend content (items)
 for (const [layerType, color] of Object.entries(roadColors)) {
   const item = document.createElement("div");
@@ -1167,6 +1320,8 @@ for (const [layerType, color] of Object.entries(roadColors)) {
   if (roadTypeItemsContainer) { 
       roadTypeItemsContainer.appendChild(item); 
   }
+
+
 
   item.addEventListener("click", () => {
     if(!sabahRoadCheckbox.checked) {
@@ -1194,6 +1349,24 @@ if(typeof updateRoadFilter === 'function'){
     updateRoadFilter();
 }
 
+
+if (potholeItemsContainer) {
+    potholeItemsContainer.style.display = "none";
+    potholeItemsContainer.innerHTML = ''; 
+
+    // Loop through the 6 Categories defined above
+    for (const [label, color] of Object.entries(CATEGORY_COLORS)) {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        item.innerHTML = `
+            <span class="legend-color" style="background-color: ${color};"></span>
+            <span>${label} Defects</span>
+        `;
+        potholeItemsContainer.appendChild(item);
+    }
+}
+
+  
 if(chainageTypeItemsContainer) {
     const data = mcdcChainageData;
     // Create the main item div
@@ -1306,6 +1479,7 @@ const sabahRoadCheckbox = document.getElementById("sabahRoadCheckbox");
 const chainageCheckbox = document.getElementById("chainageCheckbox");
 const lmcRoadCheckbox = document.getElementById("lmcCheckbox");
 const BCCheckbox = document.getElementById("BCCheckbox");
+const potholeCheckbox = document.getElementById("potholeCheckbox");
 
 // --- Sabah Roads master control ---
 if (sabahRoadCheckbox) {
@@ -1364,6 +1538,38 @@ if (BCCheckbox) {
         });
     });
 }
+
+//--- Potholes control ---
+if (potholeCheckbox) {
+    potholeCheckbox.addEventListener('change', function () {
+        const visible = this.checked;
+
+        // A. Toggle Map Layer
+        if(typeof potholeLayer !== 'undefined'){
+            potholeLayer.setVisible(visible);
+
+            if(visible && (potholeLayer.getSource() instanceof ol.source.TileWMS)){
+                potholeLayer.getSource().refresh();
+            }
+        }
+
+        // B. Toggle Legend List (The "Expand/Collapse" Logic)
+        if (potholeItemsContainer) {
+            if (visible) {
+                // Show the list
+                potholeItemsContainer.style.display = 'block';
+                potholeItemsContainer.classList.add("active");
+                potholeItemsContainer.classList.remove("disabled");
+            } else {
+                // Hide the list
+                potholeItemsContainer.style.display = 'none';
+                potholeItemsContainer.classList.remove("active");
+                potholeItemsContainer.classList.add("disabled");
+            }
+        }
+    });
+}
+
 
 // --- Chainage control ---
 if (chainageCheckbox) {

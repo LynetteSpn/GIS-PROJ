@@ -1,58 +1,151 @@
 // * ============================================================================
-//  * INTELLIGENT ROUTING & ASSET API (BACKEND MIDDLEWARE)
-//  * ============================================================================
-//  * * DESCRIPTION:
-//  * This Node.js/Express server acts as the middleware between the Client 
-//  * (OpenLayers Frontend) and the Spatial Database (PostgreSQL/PostGIS).
-//  * It handles logic that is  complex for the frontend, such as pathfinding
-//  * algorithms, asset queries, and route optimization (TSP).
-//  * * CORE TECHNOLOGIES:
-//  * - Runtime: Node.js (Express Framework)
-//  * - Database: PostgreSQL with PostGIS & pgRouting extensions
-//  * - Driver: node-postgres ('pg')
-//  * * DATABASE DEPENDENCIES (Tables required):
-//  * 1. test_roads_final       -> Main road network (topology enabled).
-//  * 2. test_roads_final_vertices_pgr -> Network nodes (intersections).
-//  * 3. tbl_bridge             -> Bridge asset inventory.
-//  * 4. tbl_culvert            -> Culvert asset inventory.
-//  * * API ENDPOINTS REFERENCE:
-//  * * 1. GET /assets/critical
-//  * - Purpose: Fetches bridges/culverts with 'Poor' condition.
-//  * - Params: ?type=bridge OR ?type=culvert
-//  * * 2. GET /route/optimize (TSP)
-//  * - Purpose: Reorders a list of random stops into an optimized travel path.
-//  * - Params: ?locations=[[lon,lat], [lon,lat], ...]
-//  * - Algorithm: Nearest Neighbor (JavaScript) + Dijkstra (pgRouting).
-//  * * 3. GET /route-by-name
-//  * - Purpose: Finds a route using road names (e.g., "Jalan A" to "Jalan B").
-//  * - Params: ?start_name=...&end_name=...
-//  * - Logic: Geocodes name -> Coordinate -> Snaps to Graph -> Routing.
-//  * * 4. GET /route (Standard A-to-B)
-//  * - Purpose: Calculates shortest path between two coordinate pairs.
-//  * - Params: ?start_lon=...&start_lat=...&end_lon=...&end_lat=...
-//  * * ============================================================================
-//  */
+// * INTELLIGENT ROUTING & ASSET API (BACKEND MIDDLEWARE)
+// * ============================================================================
+// * * DESCRIPTION:
+// * This Node.js/Express server acts as the middleware between the Client 
+// * (OpenLayers Frontend) and the Spatial Database (PostgreSQL/PostGIS).
+// * It handles logic that is complex for the frontend, such as pathfinding
+// * algorithms, asset queries, and route optimization (TSP).
+
+// * * CORE TECHNOLOGIES:
+// * - Runtime: Node.js (Express Framework)
+// * - Database: PostgreSQL with PostGIS & pgRouting extensions
+// * - Driver: node-postgres ('pg')
+// * * DATABASE DEPENDENCIES (Tables required):
+// * 1. gis_sabah_road_pgr_final      -> Main road network (topology enabled).
+// * 2. gis_sabah_vertices            -> Network nodes (intersections).
+// * 3. tbl_bridge                    -> Bridge asset inventory.
+// * 4. tbl_culvert                   -> Culvert asset inventory.
+
+// * * API ENDPOINTS REFERENCE:
+// * * 1. GET /assets/critical
+// * - Purpose: Fetches bridges/culverts with 'Poor' condition.
+// * - Params: ?type=bridge OR ?type=culvert
+
+// * * 2. GET /route/optimize (TSP)
+// * - Purpose: Reorders a list of random stops into an optimized travel path.
+// * - Params: ?locations=[[lon,lat], [lon,lat], ...]
+// * - Algorithm: Nearest Neighbor (JavaScript) + Dijkstra (pgRouting).
+
+// * * 3. GET /route-by-name
+// * - Purpose: Finds a route using road names (e.g., "Jalan A" to "Jalan B").
+// * - Params: ?start_name=...&end_name=...
+// * - Logic: Geocodes name -> Coordinate -> Snaps to Graph -> Routing.
+
+// * * 4. GET /route (Standard A-to-B)
+// * - Purpose: Calculates shortest path between two coordinate pairs.
+// * - Params: ?start_lon=...&start_lat=...&end_lon=...&end_lat=...
+// * ============================================================================
+// */
 
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const https = require('https'); 
+const fs = require('fs');      
 
 // === 1. SETUP EXPRESS WEB SERVER ===
 const app = express();
-const port = 3000;
+const port = 3005;
 app.use(cors());
+
+
+const SERVER_IP = "10.1.4.27"; 
+
 
 // === 2. SETUP POSTGRESQL CONNECTION ===
 const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'postgres', // Your Database Name
-  password: 'mynewpassword', // Your Password
-  port: 5432,
+  user: 'gis_user',
+  host: '192.168.0.35',
+  database: 'rmisv2db_prod', // Your Database Name
+  password: 'pkmgis', // Your Password
+  port: 5433,
 });
 
+app.use(express.json());
+
 // =========================================================================
-// FEATURE 1: ASSET SCANNER (With Type Filtering)
+// FEATURE 1: STANDARD ROUTING HELPER (A to B) SNAPPING BY COORDS
+// =========================================================================
+app.post('/login', async (req, res) => {
+    const { username } = req.body; // username IS the lombardi_userid
+    
+    try {
+        // 1. The "Detective" Query
+        const query = `
+            SELECT 
+                r.resource_id, 
+                r.resource_name, 
+                r.lombardi_userid,
+                g.group_desc,         
+                array_agg(d.district_code) as districts 
+            FROM tbl_resource r
+            LEFT JOIN tbl_resource_group g ON r.resource_role_id = g.group_id
+            LEFT JOIN tbl_district_resource d ON r.resource_id = d.resource_id
+            WHERE r.lombardi_userid = $1 
+              AND r.active = true
+            GROUP BY r.resource_id, r.resource_name, r.lombardi_userid, g.group_desc;
+        `;
+
+        const result = await pool.query(query, [username]);
+
+        if (result.rows.length > 0) {
+            const user = result.rows[0];
+            const role = user.group_desc || ""; // e.g., "Group IT" or "JKR/MOF"
+
+            // 2. Default Permissions (Safe Mode)
+            let permissions = {
+                canViewAllDistricts: false, // Default: Only see assigned districts
+                canViewDefects: true,       // Default: Can see potholes
+                allowedDistricts: user.districts.filter(d => d !== null)
+            };
+
+            // 3. Apply Rules based on YOUR Screenshot Strings 📏
+            
+            // RULE A: "Group IT" (Super Admin)
+            if (role === 'Group IT') {
+                permissions.canViewAllDistricts = true;
+                permissions.canViewDefects = true;
+            } 
+            
+            // // RULE B: "JKR/MOF" (Client View)
+            // else if (role === 'JKR/MOF') {
+            //     permissions.canViewAllDistricts = true; // Assuming JKR sees the whole state?
+            //     permissions.canViewDefects = false;     // HIDE Defects!
+            // }
+
+            // // RULE C: "Road Inspector"
+            // else if (role === 'Road Inspector') {
+            //     // They keep defaults: 
+            //     // - canViewAllDistricts = false (Restricted to their districts)
+            //     // - canViewDefects = true (They need to see work)
+            // }
+
+            console.log(`User ${user.lombardi_userid} logged in as [${role}]`); // Helpful for debugging
+
+            res.json({
+                success: true,
+                message: "Login Successful",
+                user: {
+                    id: user.resource_id,
+                    username: user.lombardi_userid,
+                    name: user.resource_name,
+                    role: role,
+                    permissions: permissions
+                }
+            });
+        } else {
+            res.status(404).json({ success: false, message: "User ID not found" });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+});
+
+
+// =========================================================================
+// FEATURE 2: ASSET SCANNER (With Type Filtering)
 // =========================================================================
 // It scans for critical assets (bridges and culverts in poor condition) and 
 // returns their locations.
@@ -67,19 +160,25 @@ app.get('/assets/critical', async (req, res) => {
         // 1. Query Bridges (If type is 'bridge')
         if (!type || type === 'bridge') {
             queries.push(`
-                SELECT tid as id, ST_X(geom) as lon, ST_Y(geom) as lat, 
-                       COALESCE(structure_no, 'Unnamed Bridge') as name, 'Bridge' as type, 
+                SELECT ROW_NUMBER() OVER () as id, 
+                       ST_X(geom) as lon, 
+                       ST_Y(geom) as lat, 
+                       COALESCE(structure_no, 'Unnamed Bridge') as name, 
+                       'Bridge' as type, 
                        br_general_condition as condition
                 FROM tbl_bridge 
                 WHERE br_general_condition ILIKE 'poor' AND geom IS NOT NULL
             `);
         }
 
-        // 2. Query Culverts (If type is 'culvert')
+        // 2. Query Culverts (Same trick)
         if (!type || type === 'culvert') {
             queries.push(`
-                SELECT tid as id, ST_X(geom) as lon, ST_Y(geom) as lat, 
-                       COALESCE(cv_structure_no, 'Unnamed Culvert') as name, 'Culvert' as type, 
+                SELECT ROW_NUMBER() OVER () as id, 
+                       ST_X(geom) as lon, 
+                       ST_Y(geom) as lat, 
+                       COALESCE(cv_structure_no, 'Unnamed Culvert') as name, 
+                       'Culvert' as type, 
                        cv_general_condition as condition
                 FROM tbl_culvert 
                 WHERE cv_general_condition ILIKE 'poor' AND geom IS NOT NULL
@@ -96,8 +195,78 @@ app.get('/assets/critical', async (req, res) => {
     }
 });
 
+
 // =========================================================================
-// FEATURE 2: MULTISTOP ROUTE OPTIMIZATION 
+// FEATURE: POTHOLE DEFECTS LAYER (OPTIMIZED & FAST)
+// =========================================================================
+app.get('/assets/potholes', async (req, res) => {
+    try {
+        const { districts } = req.query; 
+
+        let districtFilter = "";
+        if (districts) {
+            const distArray = districts.split(',');
+            const distString = distArray.map(d => `'${d}'`).join(',');
+            districtFilter = `AND r.district_code IN (${distString})`; 
+        }
+
+        // 1. FAST QUERY: Standard Integer Join
+        const query = `
+            SELECT 
+                r.surv_rec_id as id,
+                r.pkm_road_id,
+                t.defect_type_desc as description,
+                r.verification_status as status,
+                ST_X(r.geom) as lon,
+                ST_Y(r.geom) as lat,
+                ph.before_photo_id as before_photo,
+                ph.after_photo_id as after_photo
+
+            FROM tbl_surv_rec r
+            LEFT JOIN tbl_defect_type t ON r.defect_type_code = t.defect_type_code
+            
+            -- FAST INNER JOIN (No casting, No trimming)
+            INNER JOIN tbl_before_after_photo_link ph 
+            ON r.surv_rec_id = ph.before_surv_rec_id
+            
+            WHERE r.geom IS NOT NULL 
+            AND r.surv_rec_timestamp::date > '2021-01-01'
+            ${districtFilter}
+        
+        `;
+
+        const result = await pool.query(query);
+
+        const geoJson = {
+            type: "FeatureCollection",
+            features: result.rows.map(row => ({
+                type: "Feature",
+                properties: {
+                    id: row.id,
+                    road_id: row.pkm_road_id,
+                    name: row.description, 
+                    status: row.status,
+                    type: 'Pothole',
+                    photo_before: row.before_photo,
+                    photo_after: row.after_photo
+                },
+                geometry: {
+                    type: "Point",
+                    coordinates: [row.lon, row.lat]
+                }
+            }))
+        };
+
+        res.json(geoJson);
+
+    } catch (err) {
+        console.error("Error fetching potholes:", err);
+        res.status(500).send("Server Error");
+    }
+});
+
+// =========================================================================
+// FEATURE 4: MULTISTOP ROUTE OPTIMIZATION (TSP)
 // =========================================================================
 // It optimizes a route given multiple locations (lat/lon pairs) using a simple
 // "Nearest Neighbor" algorithm for TSP and returns the ordered route geometry.
@@ -112,17 +281,18 @@ app.get('/route/optimize', async (req, res) => {
         // 1. SNAP POINTS (We still need DB for this)
         const valuesList = locations.map((loc, index) => `(${index + 1}, ${loc[0]}, ${loc[1]})`).join(',');
         
+        // UPDATED: Using 'gis_sabah_vertices' and 'geom' column
         const snapQuery = `
             SELECT 
                 p.id as req_id, 
                 v.id as node_id, 
-                ST_X(v.the_geom) as lon, 
-                ST_Y(v.the_geom) as lat,
-                ST_Distance(v.the_geom::geography, ST_SetSRID(ST_Point(p.x, p.y), 4326)::geography) as dist
+                ST_X(v.geom) as lon, 
+                ST_Y(v.geom) as lat,
+                ST_Distance(v.geom::geography, ST_SetSRID(ST_Point(p.x, p.y), 4326)::geography) as dist
             FROM (VALUES ${valuesList}) AS p(id, x, y)
             CROSS JOIN LATERAL (
-                SELECT id, the_geom FROM test_roads_final_vertices_pgr
-                ORDER BY the_geom <-> ST_SetSRID(ST_Point(p.x, p.y), 4326) LIMIT 1
+                SELECT id, geom FROM gis_sabah_vertices
+                ORDER BY geom <-> ST_SetSRID(ST_Point(p.x, p.y), 4326) LIMIT 1
             ) v;
         `;
 
@@ -178,15 +348,16 @@ app.get('/route/optimize', async (req, res) => {
             if (i < orderedNodes.length - 1) {
                 const nextNodeInfo = orderedNodes[i+1];
 
+                // UPDATED: Using 'gis_sabah_road_pgr_final' and 'gid'
                 const legQuery = `
                     SELECT ST_AsGeoJSON(ST_Collect(geom)) as geom
                     FROM pgr_dijkstra(
-                        'SELECT id::integer, source::integer, target::integer, cost, reverse_cost FROM test_roads_final',
+                        'SELECT gid::integer as id, source::integer, target::integer, cost, reverse_co FROM gis_sabah_road_pgr_final',
                         ${nodeInfo.node_id}, 
                         ${nextNodeInfo.node_id}, 
                         false
                     ) d
-                    JOIN test_roads_final w ON d.edge = w.id;
+                    JOIN gis_sabah_road_pgr_final w ON d.edge = w.gid;
                 `;
                 
                 const legResult = await pool.query(legQuery);
@@ -224,32 +395,36 @@ app.get('/route/optimize', async (req, res) => {
 });
 
 // =========================================================================
-// FEATURE 3: STANDARD ROUTING HELPER (A to B) SNAPPING BY COORDS
+// FEATURE 5: STANDARD ROUTING HELPER (A to B) SNAPPING BY COORDS
 // =========================================================================
 async function getRouteFromCoords(lon1, lat1, lon2, lat2) {
+    // UPDATED: Table names and column 'gid'
     const sqlQuery = `
         WITH route AS (
             SELECT *
             FROM pgr_dijkstra(
-                'SELECT id::integer AS id, source::integer, target::integer, cost, reverse_cost 
-                 FROM test_roads_final 
+                'SELECT gid::integer AS id, source::integer, target::integer, cost, reverse_co 
+                 FROM gis_sabah_road_pgr_final 
                  WHERE source IS NOT NULL AND target IS NOT NULL AND cost IS NOT NULL'::text,
-                (SELECT id::integer FROM test_roads_final_vertices_pgr ORDER BY the_geom <-> ST_SetSRID(ST_Point($1, $2), 4326) LIMIT 1),
-                (SELECT id::integer FROM test_roads_final_vertices_pgr ORDER BY the_geom <-> ST_SetSRID(ST_Point($3, $4), 4326) LIMIT 1),
+                (SELECT id::integer FROM gis_sabah_vertices ORDER BY geom <-> ST_SetSRID(ST_Point($1, $2), 4326) LIMIT 1),
+                (SELECT id::integer FROM gis_sabah_vertices ORDER BY geom <-> ST_SetSRID(ST_Point($3, $4), 4326) LIMIT 1),
                 false
             )
         ),
         route_geom AS (
             SELECT ST_AsGeoJSON(ST_Collect(w.geom)) AS geom
             FROM route AS di
-            JOIN test_roads_final AS w ON di.edge = w.id
+            JOIN gis_sabah_road_pgr_final AS w ON di.edge = w.gid
         ),
         route_steps AS (
             SELECT json_agg(steps.* ORDER BY steps.step) AS steps
             FROM (
-                SELECT di.seq AS step, COALESCE(w.road_name, 'Unnamed Road') AS road_name, ROUND(w.cost::numeric, 1) AS length_meters
+                SELECT di.seq AS step, 
+                       -- Assuming road_name exists, if not change to 'Unnamed Road' or specific column
+                       COALESCE(w.road_name, 'Unnamed Road') AS road_name, 
+                       ROUND(w.cost::numeric, 1) AS length_meters
                 FROM route AS di
-                JOIN test_roads_final AS w ON di.edge = w.id
+                JOIN gis_sabah_road_pgr_final AS w ON di.edge = w.gid
                 WHERE di.edge > 0 
             ) AS steps
         )
@@ -270,7 +445,8 @@ async function getRouteFromCoords(lon1, lat1, lon2, lat2) {
 app.get('/route-by-name', async (req, res) => {
     try {
         const { start_name, end_name } = req.query;
-        const geocodeQuery = `SELECT ST_X(ST_StartPoint(geom)) as lon, ST_Y(ST_StartPoint(geom)) as lat FROM test_roads_final WHERE road_name ILIKE $1 LIMIT 1`;
+        // UPDATED: Table name
+        const geocodeQuery = `SELECT ST_X(ST_StartPoint(geom)) as lon, ST_Y(ST_StartPoint(geom)) as lat FROM gis_sabah_road_pgr_final WHERE road_name ILIKE $1 LIMIT 1`;
 
         const startResult = await pool.query(geocodeQuery, [`%${start_name}%`]);
         if (startResult.rows.length === 0) return res.status(404).send(`Start not found`);
@@ -301,7 +477,22 @@ app.get('/route', async (req, res) => {
     }
 });
 
+
+
 // === START SERVER ===
-app.listen(port, () => {
-  console.log(`Routing API listening at https://10.1.4.18:${port}`);
-});
+try {
+    const httpsOptions = {
+        key: fs.readFileSync('key.pem'),
+        cert: fs.readFileSync('cert.pem')
+    };
+
+    https.createServer(httpsOptions, app).listen(port, () => {
+        console.log(`✅ SECURE API LISTENING: https://${SERVER_IP}:${port}`);
+        console.log(`   (Remember to accept the self-signed certificate in your browser first!)`);
+    });
+
+} catch (err) {
+    console.error("❌ SSL ERROR: Could not find key.pem or cert.pem.");
+    console.error("   Run this command in Git Bash to generate them:");
+    console.error("   openssl req -nodes -new -x509 -keyout key.pem -out cert.pem -days 365");
+}

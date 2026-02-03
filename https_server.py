@@ -39,7 +39,7 @@ def start_secure_server(port, certfile, keyfile):
         print("-" * 40)
         print("HTTPS Server successfully configured.")
         print(f"SECURE SERVER RUNNING AT: https://{SERVER_ADDRESS}:{port}/")
-        print(f"Access via your mobile at: https://10.1.4.18:{port}/")
+        print(f"Access via your mobile at: https://10.1.4.27:{port}/")
         print("Remember to accept the self-signed certificate warning on your mobile.")
         print("-" * 40)
         

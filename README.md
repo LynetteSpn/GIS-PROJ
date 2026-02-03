@@ -1,74 +1,83 @@
-# RMIS Web Map Prototype 
+# 🗺️ RMIS - Road Maintenance Information System
 
-A prototype web application for road maintenance management and routing in Sabah. This project demonstrates a full-stack GIS architecture designed for internal testing.
+RMIS is a comprehensive web-based geospatial platform designed for managing road assets, monitoring defects (potholes), and optimizing maintenance routing. It integrates a high-performance OpenLayers frontend with a robust Node.js and PostGIS backend to deliver real-time insights and decision support.
 
-## Architecture Overview
+## 📂 Project Structure
 
-* **Frontend:** OpenLayers 8 (HTML/JS hosted on Apache).
-* **Backend API:** Node.js (Handles routing logic between Frontend and Database).
-* **Map Server:** GeoServer (Serves WMS tiles for visualization and WFS for data queries).
-* **Database:** PostgreSQL 18 + PostGIS + pgRouting 4.
+### **1. Core Frontend (HTML & Configuration)**
+| File | Description |
+| :--- | :--- |
+| **`index.html`** | **Main Application Entry.** Contains the map container, sidebar UI structure, and loads all script dependencies. |
+| **`login.html`** | **Authentication Portal.** Secure user login interface required before accessing the main map system. |
+| **`manifest.json`** | **PWA Configuration.** Metadata (name, icons, theme color) allowing the application to be installed as a native-like app on mobile devices. |
+| **`sw.js`** | **Service Worker.** Manages caching strategies and offline capabilities for the Progressive Web App (PWA). |
 
----
+### **2. Map Logic (JavaScript Modules)**
+| File | Role | Key Features |
+| :--- | :--- | :--- |
+| **`rmis.js`** | **Core Engine** | • **Map Initialization:** OpenLayers setup with View and Interaction defaults.<br>• **Layer Management:** Handling WMS (Roads, Assets) and Vector layers.<br>• **Basemap Switcher:** Toggles between Satellite, Hybrid, and OSM.<br>• **Search Engine:** WFS-based search for Roads, IDs, and Assets with autocomplete. |
+| **`rmis2.js`** | **Interactions** | • **Popup System:** Interactive "Road Info" tables for Potholes, Bridges, and Culverts.<br>• **Drill-Down Nav:** Logic to navigate from Road -> Asset List -> Asset Details.<br>• **Geolocation:** "Locate Me" tools and coordinate sharing.<br>• **Mouse Events:** Hover effects and coordinate display. |
+| **`rmis3.js`** | **Tools & Routing** | • **Routing Engine:** Integration with pgRouting for A-to-B navigation.<br>• **TSP Optimization:** Multi-stop route optimization using Nearest Neighbor logic.<br>• **Job Management:** UI for adding, removing, and reordering maintenance stops.<br>• **Measurement:** Interactive tool to measure road lengths on the map. |
+| **`rmis4.js`** | **Analytics Dashboard** | • **Viewport-Driven Stats:** Real-time aggregation of data based on the currently visible map area.<br>• **Interactive Charts:** Visualizes Asset Condition (Doughnut) and Inventory (Bar) using Chart.js.<br>• **Asset Selector:** Switches analysis context between "Bridges & Culverts" and "Road Defects". |
 
-## Installation & Setup
+### **3. Backend (Server)**
+| File | Description |
+| :--- | :--- |
+| **`server.js`** | **API & Application Server.**<br>• Connects to the **PostgreSQL/PostGIS** database.<br>• Serves static frontend files (HTML/JS/CSS).<br>• Handles API Endpoints (e.g., `/assets/potholes`, `/route`, `/optimize`).<br>• Acts as a proxy for WFS/WMS requests to GeoServer to avoid CORS issues. |
 
-### 1. Database Setup (The Important Part) 
-
-**Note:** Routing requires a "clean" network topology where lines are explicitly split at every intersection. Raw GIS data often contains "MultiLineStrings" or "Overpasses" (lines crossing without nodes) which break routing engines.
-
-Use a **Hybrid Workflow (SQL + QGIS)** to prepare the routable graph:
-
-#### Step A: Prepare Raw Data (in DBeaver)
-First, duplicate the main road table to a working copy. During this process, use PostGIS functions to:
-* **Explode MultiLineStrings:** Convert complex collections into simple `LineStrings` (one segment per row).
-* **Force 2D:** Flatten the geometry to remove elevation (Z-values) that might prevent connections.
-
-#### Step B: Noding & Cleaning (in QGIS)
-Standard database functions cannot easily split lines where they cross without existing nodes (e.g., a T-junction that touches but doesn't connect).
-1.  Load the prepared table into **QGIS**.
-2.  Use the **Processing Toolbox** (specifically `v.clean` from GRASS or the `Union` overlay tool).
-3.  Run the tool to physically **split lines at all intersections**.
-4.  Export the "noded" result back to the database as a new table (e.g., `test_roads_final`).
-
-#### Step C: Build Topology (in DBeaver)
-Now that the geometry is physically cut and clean:
-1.  Add the required pgRouting columns (`source`, `target`, `cost`, `reverse_cost`).
-2.  Run **`pgr_createTopology`**. This "glues" the network together by assigning Node IDs to every start and end point.
-3.  Calculate the **`cost`** (length in meters) for every segment so the algorithm knows the distance.
-
-> 📖 **References:**
-> * [Official pgRouting Topology Documentation](https://docs.pgrouting.org/latest/en/pgRouting-concepts.html#topology)
-> * [GIS Stack Exchange (Community Solutions for Geometry)](https://gis.stackexchange.com/)
+### **4. Styling (CSS)**
+| File | Description |
+| :--- | :--- |
+| **`stylermis.css`** | **Base Styles.** Defines the core layout, Sidebar, Map controls, Layer Switcher, and Legend styling. |
+| **`stylermis2.css`** | **Popup Styles.** Specific styling for the Info Popups, Data Tables, and Asset detail views. |
+| **`stylermis3.css`** | **Tool & Dashboard Styles.** Styling for the Routing Panel, Floating Action Buttons (FAB), Optimization UI, and Analytics Dashboard. |
 
 ---
 
-### 2. Routing API (Node.js)
+## 🚀 Quick Start Guide
 
-This lightweight middleware receives coordinates from the frontend, executes `pgr_dijkstra` queries on the database, and returns the path as GeoJSON.
+### **Prerequisites**
+* Node.js (v14 or higher)
+* PostgreSQL with PostGIS extension installed
+* GeoServer (for WMS/WFS layers)
 
-1.  Navigate to the `api` folder.
-2.  Install dependencies: `npm install`
-3.  Update `server.js` with your local database credentials.
-4.  Start the server: `node server.js`
+### **Installation**
+1.  **Clone the Repository:**
+    ```bash
+    git clone [https://github.com/your-username/rmis-project.git](https://github.com/your-username/rmis-project.git)
+    cd rmis-project
+    ```
 
-### 3. Frontend (Apache)
+2.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
 
-1.  Host the `index.html`, `js`, and `css` files on a standard Apache server (e.g., XAMPP).
-2.  **Configuration:** Ensure `rmis3.js` points to your API's IP address (e.g., `http://localhost:3000` or your LAN IP) so mobile devices can connect.
+3.  **Database Configuration:**
+    Ensure `server.js` (or your config file) has the correct credentials for your PostgreSQL database:
+    ```javascript
+    const pool = new Pool({
+      user: 'postgres',
+      host: 'localhost',
+      database: 'rmis_db',
+      password: 'your_password',
+      port: 5432,
+    });
+    ```
 
-### 4. GeoServer
+4.  **Run the Server:**
+    ```bash
+    node server.js
+    ```
 
-1.  Connect GeoServer to your PostGIS database store.
-2.  Publish the road layers via **WMS** (for visual display) and **WFS** (for snapping/identifying features).
+5.  **Access the App:**
+    Open your browser and navigate to:
+    `http://localhost:3000` (or your configured port).
 
 ---
 
-## How to Use the Map (navigate specifically)
-
-### Navigation (Routing)
-1.  Click the **"Navigate"** button in the sidebar.
-2.  **Select "From Current Location":** Uses GPS to set the start point (requires HTTPS or Localhost).
-3.  **Select "Select on Map":** Manually pick a Start and End point.
-4.  The system calculates the shortest path using Dijkstra's algorithm and renders a blue route line.
-
+## 🛠️ Tech Stack
+* **Frontend:** HTML5, CSS3, JavaScript (Vanilla), OpenLayers v7+, Chart.js
+* **Backend:** Node.js, Express.js
+* **Database:** PostgreSQL, PostGIS
+* **Map Services:** GeoServer (WMS/WFS), pgRouting (Navigation)

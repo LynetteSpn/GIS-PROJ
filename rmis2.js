@@ -24,6 +24,7 @@ let popupState = {
     roadCopyText: ''
 };
 
+
 // =========================================================
 // SELECTION MODE TOGGLE (Area vs Single)
 // =========================================================
@@ -148,12 +149,12 @@ window.selectSpecificRoad = function(index, coordinate) {
                 // Add to highlight layer
                 highlightLayer.getSource().addFeature(clone);
                 
-                // --- NEW: ZOOM TO FEATURE ---
+                // ZOOM TO FEATURE ---
                 const extent = geom.getExtent();
                 map.getView().fit(extent, {
                     padding: [100, 100, 100, 100], // Padding so popup doesn't cover the road
-                    duration: 1000,                // Animation speed (1 second)
-                    maxZoom: 17                    // Don't zoom too close for tiny segments
+                    duration: 1000,                
+                    maxZoom: 17                   
                 });
             }
         }
@@ -239,6 +240,7 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
     // Filter Assets by Type
     const bridges = nearbyAssets.filter(a => a.properties._assetType === 'Bridge');
     const culverts = nearbyAssets.filter(a => a.properties._assetType === 'Culvert');
+    const potholes = nearbyAssets.filter(a => a.properties._assetType === 'Pothole');
 
     // Page 1: Bridges (If any)
     if (bridges.length > 0) {
@@ -248,6 +250,10 @@ function showRoadInfo(feature, coordinate, nearbyAssets = []) {
     // Page 2: Culverts (If any)
     if (culverts.length > 0) {
         popupState.pages.push({ type: 'CULVERTS', data: culverts });
+    }
+
+    if (potholes.length > 0) {
+        popupState.pages.push({ type: 'POTHOLES', data: potholes });
     }
 
     // --- 2. PREPARE ROAD DISPLAY ---
@@ -328,7 +334,7 @@ window.navigatePopup = function(direction) {
 
     popupState.currentIndex = newIndex;
     
-    // Call the NEW renderer
+    // Call the renderer
     renderPopupPage(newIndex);
 };
 
@@ -395,6 +401,7 @@ window.showAssetDirectly = function(feature, coordinate) {
     popupElement.style.display = 'block';
     lockedPopup = true;
 };
+
 // 2. The Renderer (Builds the HTML for Road OR Grouped Assets)
 function renderPopupPage(pageIndex) {
     const page = popupState.pages[pageIndex];
@@ -402,12 +409,12 @@ function renderPopupPage(pageIndex) {
     let html = '';
 
     // --- HEADER & CLOSE BUTTON ---
-    // Show (Page X of Y) only if multiple pages exist
     const pageCounter = totalPages > 1 ? `<span style="font-size:12px; opacity:0.8; margin-left:5px;">(Layer ${pageIndex + 1} of ${totalPages})</span>` : '';
     
     let title = 'Road Info';
     if (page.type === 'BRIDGES') title = `Bridges Found (${page.data.length})`;
     if (page.type === 'CULVERTS') title = `Culverts Found (${page.data.length})`;
+    if (page.type === 'POTHOLES') title = `Potholes Found (${page.data.length})`;
 
     html += `
         <div class="popup-header">
@@ -419,81 +426,92 @@ function renderPopupPage(pageIndex) {
     html += `<div class="popup-table-container">`;
 
     if (page.type === 'ROAD') {
-        // Render Single Road Table (We rebuild it from stored data to keep logic simple)
-        // Note: In the previous step we built tableRows string, but here we are re-rendering.
-        // To be cleaner, we could store the HTML string, but re-building is fine for small data.
-        // (For simplicity, I'm assuming the tableRows logic from showRoadInfo is mainly for the initial build. 
-        // Ideally, you'd store the Road HTML string in the page object to avoid rebuilding).
-        
-        // Let's grab the fields logic again or assume we passed the HTML string. 
-        // IMPROVEMENT: Let's Assume page.data contains the raw props.
-        // To save code space, let's rebuild the table here:
         html += buildRoadTableHTML(page.data);
         
     } else {
-        // Render GROUPED ASSETS (Bridges/Culverts)
-        // This is the scrollable list of tables
-        // Render GROUPED ASSETS (Bridges/Culverts)
+        // Render GROUPED ASSETS
         page.data.forEach((asset, idx) => {
-            const p = asset.properties;
-            const isBridge = (page.type === 'BRIDGES');
             
-            // Separator line (if not the first item)
-            if (idx > 0) html += `<hr style="border:0; border-top:2px dashed #ccc; margin:15px 0;">`;
-            
-            // --- CHANGED TITLE LOGIC HERE ---
-            // Get the ID from properties
-            const idValue = isBridge ? p.structure_no : p.cv_structure_no;
-            // Determine the label text
-            const typeLabel = isBridge ? "Bridge ID" : "Culvert ID";
-            
-            // Final HTML: "Bridge ID: 13-10076-01" (We removed the loop index #1 to make it cleaner)
-            html += `<div style="font-weight:bold; color:#007bff; margin-bottom:5px; font-size:13px;">${typeLabel}: ${idValue || 'Unnamed'}</div>`;
-            // -------------------------------
-            
-            // Item Table
-            html += `<table class="popup-table">`;
-            
-            // Define fields (Including full details as requested earlier)
-            const fields = isBridge ? 
-                [
-                    {k:'br_type_code', l:'Type'}, 
-                    {k:'br_general_condition', l:'Condition'}, 
-                    {k:'br_chn_start', l:'Start Ch.'},
-                    {k:'br_chn_end', l:'End Ch.'},
-                    {k:'br_length', l:'Length (m)'}
-                ] :
-                [
-                    {k:'cv_type_code', l:'Type'}, 
-                    {k:'cv_general_condition', l:'Condition'}, 
-                    {k:'cv_chn_start', l:'Start Ch.'},
-                    {k:'cv_chn_end', l:'End Ch.'},
-                    {k:'cv_length', l:'Length (m)'}
-                ];
+            // --- THE FIX IS HERE ---
+            // Check if it's an OpenLayers Feature (.getProperties) or simple JSON (.properties)
+            const p = asset.getProperties ? asset.getProperties() : asset.properties;
+            // -----------------------
 
-            fields.forEach(f => {
-                let val = p[f.k];
-                if (val === null || val === undefined || val === 'null') val = '-';
+            if (!p) return; // Skip if data is bad
+
+            // Separator line 
+            if (idx > 0) html += `<hr style="border:0; border-top:2px dashed #ccc; margin:15px 0;">`;
+
+            // =========================================================
+            // A. POTHOLE RENDERER
+            // =========================================================
+            if (page.type === 'POTHOLES') {
+                html += `<div style="font-weight:bold; color:#d62222; margin-bottom:5px; font-size:13px;">Pothole ID: ${p.id || 'N/A'}</div>`;
                 
-                // Color Condition
-                if (f.l === 'Condition') {
-                    const c = val.toString().toLowerCase();
-                    // Simple traffic light logic
-                    const color = c === 'poor' ? '#d62222' : (c === 'fair' ? '#f0ad4e' : '#28a745');
-                    val = `<span style="color:${color}; font-weight:bold;">${val}</span>`;
+                html += `<table class="popup-table">`;
+                html += `<tr><td class="popup-label">Description</td><td class="popup-value">${p.name || '-'}</td></tr>`;
+                html += `<tr><td class="popup-label">Status</td><td class="popup-value" style="font-weight:bold;">${p.status || '-'}</td></tr>`;
+                html += `</table>`;
+
+                html += `<div style="display:flex; gap:10px; margin-top:10px;">`;
+                
+                // Before Photo
+                if (p.photo_before && p.photo_before !== 'null') {
+                    html += `
+                        <div style="flex:1;">
+                            <div style="font-size:10px; color:#666; margin-bottom:2px;">Before</div>
+                            <img src="${p.photo_before}" style="width:100%; border:1px solid #ccc; cursor:pointer;" onclick="window.open(this.src)">
+                        </div>`;
+                } else {
+                     html += `<div style="flex:1; font-size:10px; color:#999; font-style:italic;">No Before Photo</div>`;
                 }
+
+                // After Photo
+                if (p.photo_after && p.photo_after !== 'null') {
+                    html += `
+                        <div style="flex:1;">
+                            <div style="font-size:10px; color:#666; margin-bottom:2px;">After</div>
+                            <img src="${p.photo_after}" style="width:100%; border:1px solid #ccc; cursor:pointer;" onclick="window.open(this.src)">
+                        </div>`;
+                } else {
+                     html += `<div style="flex:1; font-size:10px; color:#999; font-style:italic;">No After Photo</div>`;
+                }
+                html += `</div>`; 
+
+            } 
+            // =========================================================
+            // B. EXISTING BRIDGE/CULVERT RENDERER
+            // =========================================================
+            else {
+                const isBridge = (page.type === 'BRIDGES');
+                const idValue = isBridge ? p.structure_no : p.cv_structure_no;
+                const typeLabel = isBridge ? "Bridge ID" : "Culvert ID";
                 
-                html += `<tr><td class="popup-label" style="width:40%">${f.l}</td><td class="popup-value">${val}</td></tr>`;
-            });
-            
-            html += `</table>`;
+                html += `<div style="font-weight:bold; color:#007bff; margin-bottom:5px; font-size:13px;">${typeLabel}: ${idValue || 'Unnamed'}</div>`;
+                html += `<table class="popup-table">`;
+                
+                const fields = isBridge ? 
+                    [{k:'br_type_code', l:'Type'}, {k:'br_general_condition', l:'Condition'}, {k:'br_chn_start', l:'Start Ch.'}, {k:'br_chn_end', l:'End Ch.'}, {k:'br_length', l:'Length (m)'}] :
+                    [{k:'cv_type_code', l:'Type'}, {k:'cv_general_condition', l:'Condition'}, {k:'cv_chn_start', l:'Start Ch.'}, {k:'cv_chn_end', l:'End Ch.'}, {k:'cv_length', l:'Length (m)'}];
+
+                fields.forEach(f => {
+                    let val = p[f.k];
+                    if (val === null || val === undefined || val === 'null') val = '-';
+                    if (f.l === 'Condition') {
+                        const c = val.toString().toLowerCase();
+                        const color = c === 'poor' ? '#d62222' : (c === 'fair' ? '#f0ad4e' : '#28a745');
+                        val = `<span style="color:${color}; font-weight:bold;">${val}</span>`;
+                    }
+                    html += `<tr><td class="popup-label" style="width:40%">${f.l}</td><td class="popup-value">${val}</td></tr>`;
+                });
+                html += `</table>`;
+            }
         });
     }
 
     html += `</div>`; // End Container
 
     // --- FOOTER NAVIGATION ---
-    // Check if we have "Back List" button (Global MultiSelect)
     const hasBackList = (window.multiSelectFeatures && window.multiSelectFeatures.length > 1 && pageIndex === 0);
     let backListBtn = hasBackList ? `<button class="popup-action-btn" onclick="restoreMultiList();" style="background:#666; margin-right:5px;">&larr; List</button>` : '';
 
@@ -515,7 +533,8 @@ function renderPopupPage(pageIndex) {
             ${navButtons}
         </div>`;
 
-    popupContent.innerHTML = html;
+    const popupContent = document.getElementById('road-popup-content');
+    if(popupContent) popupContent.innerHTML = html;
 }
 
 // Helper to rebuild Road Table (To keep renderPopupPage clean)
@@ -549,206 +568,140 @@ function buildRoadTableHTML(props) {
     html += `</table>`;
     return html;
 }
+
 // =========================================================================
 // CLICK HANDLER (Upgraded for Multi-Select + Smart Single Select)
+// =========================================================================
 async function handleRoadInfoClick(evt) {
     const targetElement = evt.originalEvent ? evt.originalEvent.target : null;
     if (targetElement && targetElement.closest('#road-popup')) return;
 
-    // 1. Clear previous state
+    // 1. Clear previous state (Consolidated into one block)
     if (lockedPopup) hideRoadInfo();
     if (typeof highlightLayer !== 'undefined') highlightLayer.getSource().clear();
 
-    // 2. Check if a Bridge/Culvert vector feature was clicked (PRIORITY!)
+    // =========================================================
+    // 2. CHECK FOR PRIORITY ASSETS (Bridges, Culverts, POTHOLES)
+    // =========================================================
     let assetFeature = null;
+
     map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
-        // You may need to confirm your bridgeLayer/culvertLayer names
         const props = feature.getProperties();
+        const layerName = layer ? layer.get('name') : '';
+
+        // Check for specific layers OR unique properties
         if (
-            (layer && (layer.get('name') === 'BridgeLayer' || layer.get('name') === 'CulvertLayer')) ||
-            props.structure_no || props.cv_structure_no  // Fallback if name missing
+            layerName === 'BridgeLayer' || 
+            layerName === 'CulvertLayer' || 
+            layerName === 'PotholeLayer' || // Check Layer Name
+            props.type === 'Pothole' ||     // Check Property
+            props.structure_no ||           // Check Bridge ID
+            props.cv_structure_no           // Check Culvert ID
         ) {
             assetFeature = feature;
-            return true; // Found one, stop searching
+            return true; // Stop searching, we found the top item
         }
-    });
+    }, { hitTolerance: 5 });
+
+    // 3. HANDLE ASSET CLICK (Stop processing if found)
     if (assetFeature) {
-        window.showAssetDirectly(assetFeature, evt.coordinate);
-        return; // Do not process as road
+        const p = assetFeature.getProperties();
+
+        // SCENARIO A: It is a Pothole -> Use your new Carousel Renderer
+        if (p.type === 'Pothole' || (assetFeature.getLayer() && assetFeature.getLayer().get('name') === 'PotholeLayer')) {
+             
+             // Trick the popup into showing just this pothole as a "Page"
+             // This ensures we use the correct Photo Renderer
+             popupState.pages = [{ type: 'POTHOLES', data: [assetFeature] }];
+             popupState.currentIndex = 0;
+             
+             if (typeof renderPopupPage === 'function') {
+                renderPopupPage(0);
+             }
+             
+             // Position and Show Popup
+             const popupElement = document.getElementById('road-popup');
+             const popupOverlay = map.getOverlays().getArray().find(o => o.getElement() === popupElement);
+             if(popupOverlay) popupOverlay.setPosition(evt.coordinate);
+             popupElement.style.display = 'block';
+             lockedPopup = true;
+
+        } 
+        // SCENARIO B: It is a Bridge/Culvert -> Use the existing direct view
+        else {
+             if (typeof window.showAssetDirectly === 'function') {
+                 window.showAssetDirectly(assetFeature, evt.coordinate);
+             }
+        }
+        
+        return; // <--- CRITICAL: Do not proceed to Road Logic!
     }
 
-
-    // 0. Ignore clicks inside popup
-    const targetElement2 = evt.originalEvent ? evt.originalEvent.target : null;
-    if (targetElement2 && targetElement2.closest('#road-popup')) return;
-
-    // 1. Clear previous state
-    if (lockedPopup) hideRoadInfo();
-    highlightLayer.getSource().clear();
-
-    // 2. Determine Mode
+    // =========================================================
+    // 4. PREPARE FOR ROAD SEARCH
+    // =========================================================
     const mode = window.currentSelectionMode || 'radius';
-    let bufferDegrees;
-    let visualRadiusMeters;
+    let bufferDegrees = (mode === 'precise') ? 0.00003 : 0.0003;
+    let visualRadiusMeters = (mode === 'precise') ? 5 : 200;
 
-    if (mode === 'precise') {
-        bufferDegrees = 0.00003;
-        visualRadiusMeters = 5;
-    } else {
-        bufferDegrees = 0.0003; // Radius Mode
-        visualRadiusMeters = 200;
-    }
-
-
-    // 3. Visual Feedback (Red Circle)
-
+    // Visual Feedback (Red Circle)
     if (typeof clickRadiusSource !== 'undefined') {
-
         clickRadiusSource.clear();
-
         clickRadiusSource.addFeature(new ol.Feature({
-
             geometry: new ol.geom.Circle(evt.coordinate, visualRadiusMeters)
-
         }));
-
         setTimeout(() => { if (clickRadiusSource) clickRadiusSource.clear(); }, 1000);
-
     }
 
-// Make it Global by attaching to 'window'
-window.copyRoadInfoToClipboard = function(btnElement) { 
-    const popupContent = document.getElementById('road-popup-content');
-    
-    // Safety check
-    if (!popupContent) return;
-
-    const textToCopy = popupContent.dataset.copyText;
-    
-    if (!textToCopy) {
-        alert('No info to copy.');
-        return;
-    }
-
-    navigator.clipboard.writeText(textToCopy).then(() => {
-        // Visual Feedback
-        const originalHTML = btnElement.innerHTML;
-        btnElement.innerHTML = '<i class="fas fa-check"></i> Copied!';
-        btnElement.style.backgroundColor = '#4CAF50'; // Green
-        
-        // Reset after 1.5 seconds
-        setTimeout(() => {
-            btnElement.innerHTML = originalHTML;
-            btnElement.style.backgroundColor = ''; // Reset color
-        }, 1500);
-        
-    }).catch(err => {
-        console.error('Copy failed:', err);
-        alert('Failed to copy to clipboard.');
-    });
-};
-
-    // 4. FIND FEATURES
-
+    // 5. FIND ROAD FEATURES
     let foundFeatures = [];
 
-
-
     // Strategy A: Check Local Vector Features
-
     map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
-
+        // Ignore Reference Layers
         if (layer && (layer.get('name') === 'DistrictLayer' || layer.get('name') === 'MeasureLayer')) return null;
 
-        foundFeatures.push(f);
+        // CRITICAL FIX: Ignore Potholes if they slip into this loop
+        const p = f.getProperties();
+        if (p.type === 'Pothole' || (layer && layer.get('name') === 'PotholeLayer')) return null;
 
+        foundFeatures.push(f);
     });
 
-
-
     // Strategy B: If Local failed, try WFS Radius Search
-
     if (foundFeatures.length === 0) {
-
         const [lon, lat] = ol.proj.toLonLat(evt.coordinate);
-
         const cql = `BBOX(geom, ${lon - bufferDegrees}, ${lat - bufferDegrees}, ${lon + bufferDegrees}, ${lat + bufferDegrees}, 'EPSG:4326')`;
-
+        
         const wfsFeatures = await queryWFS('gis_sabah_road_map', cql);
-
-       
-
+        
         // Filter active types
-
         foundFeatures = wfsFeatures.filter(f => activeRoadTypes.has(f.get('layer')) || activeRoadTypes.size === 0);
-
     }
 
-
-
-    // 5. PROCESS RESULTS
-
+    // 6. PROCESS ROAD RESULTS
     if (foundFeatures.length > 0) {
+        if (mode === 'precise') foundFeatures = [foundFeatures[0]];
 
-       
-
-        // --- NEW FIX FOR SINGLE MODE ---
-
-        // If mode is Precise, force it to only keep the first feature found.
-
-        if (mode === 'precise') {
-
-            foundFeatures = [foundFeatures[0]];
-
-        }
-
-        // -------------------------------
-
-
-
-        // A. Highlight ALL found features
-
+        // Highlight
         foundFeatures.forEach(f => {
-
             const clone = f.clone();
-
             const geom = clone.getGeometry();
-
             if (geom) geom.transform('EPSG:4326', map.getView().getProjection());
-
             highlightLayer.getSource().addFeature(clone);
-
         });
 
-
-
-        // B. Decide Popup Type
-
+        // Show Popup
         if (foundFeatures.length === 1) {
-
-            // Single Result -> Show Details Immediately
-
             processSingleFeature(foundFeatures[0], evt.coordinate);
-
         } else {
-
-            // Multiple Results -> Show List
-
             showMultiRoadList(foundFeatures, evt.coordinate);
-
         }
 
-
-
     } else {
-
         hideRoadInfo();
-
     }
-
 }
-
-
 
 // Helper to process a single feature (Ensure it is attached to window!)
 window.processSingleFeature = async function(feature, coordinate) {
@@ -787,7 +740,6 @@ window.processSingleFeature = async function(feature, coordinate) {
     // Use existing global function
     showRoadInfo(feature, coordinate, nearbyAssets);
 };
-
 
 // =========================================================================
 // 13. LOCATE ME BUTTON 
@@ -865,7 +817,6 @@ locateBtn.addEventListener('click', () => {
                         title="Copy Lat/Lon coordinates">
                         <i class="fas fa-copy"></i> Copy Coords
                         </a>`;
-
 
         popupElement.innerHTML = `
             <div class="share-popup-box">
