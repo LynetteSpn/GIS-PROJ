@@ -1,3 +1,26 @@
+/*
+ * =========================================================================
+ * RMIS BACKEND API SERVER
+ * =========================================================================
+ * Purpose: Acts as the middleware between the OpenLayers Frontend and PostGIS Database.
+ * Tech Stack: Node.js, Express, PostgreSQL (pg), PostGIS, pgRouting.
+ * * CORE MODULES:
+ * 1. AUTHENTICATION (/login): 
+ * - Validates user roles (e.g., 'Group IT', 'JKR').
+ * - Assigns permission flags (canViewDefects, allowedDistricts).
+ * * 2. ASSET VISUALIZATION:
+ * - /assets/critical: Fetches 'Poor' condition Bridges & Culverts.
+ * - /assets/potholes: Returns validated pothole data with photo links.
+ * * 3. ROUTING ENGINE (pgRouting):
+ * - /route: Standard A-to-B Dijkstra navigation.
+ * - /route/optimize: Solves Traveling Salesperson Problem (TSP) using 
+ * Nearest Neighbor logic to reorder multiple maintenance stops.
+ * * 4. GEOSPATIAL LOGIC:
+ * - Snaps user coordinates to the nearest graph node (gis_sabah_vertices).
+ * - Generates GeoJSON FeatureCollections for map rendering.
+ * =========================================================================
+ */
+
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
