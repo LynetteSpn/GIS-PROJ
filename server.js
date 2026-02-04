@@ -48,10 +48,10 @@ const pool = new Pool({
 app.use(express.json());
 
 // =========================================================================
-// FEATURE 1: STANDARD ROUTING HELPER (A to B) SNAPPING BY COORDS
+// FEATURE 1: LOGIN & ROLE-BASED PERMISSIONS
 // =========================================================================
 app.post('/login', async (req, res) => {
-    const { username } = req.body; // username IS the lombardi_userid
+    const { username } = req.body; // username is the lombardi_userid
     
     try {
         // 1. The "Detective" Query
@@ -82,27 +82,6 @@ app.post('/login', async (req, res) => {
                 canViewDefects: true,       // Default: Can see potholes
                 allowedDistricts: user.districts.filter(d => d !== null)
             };
-
-            // 3. Apply Rules based on YOUR Screenshot Strings 📏
-            
-            // RULE A: "Group IT" (Super Admin)
-            if (role === 'Group IT') {
-                permissions.canViewAllDistricts = true;
-                permissions.canViewDefects = true;
-            } 
-            
-            // // RULE B: "JKR/MOF" (Client View)
-            // else if (role === 'JKR/MOF') {
-            //     permissions.canViewAllDistricts = true; // Assuming JKR sees the whole state?
-            //     permissions.canViewDefects = false;     // HIDE Defects!
-            // }
-
-            // // RULE C: "Road Inspector"
-            // else if (role === 'Road Inspector') {
-            //     // They keep defaults: 
-            //     // - canViewAllDistricts = false (Restricted to their districts)
-            //     // - canViewDefects = true (They need to see work)
-            // }
 
             console.log(`User ${user.lombardi_userid} logged in as [${role}]`); // Helpful for debugging
 
