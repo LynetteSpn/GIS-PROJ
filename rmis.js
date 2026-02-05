@@ -22,6 +22,36 @@
  * =========================================================================
  */
 
+// 1. READ USER
+const storedUser = localStorage.getItem('currentUser');
+if (!storedUser) window.location.href = 'login.html';
+const currentUser = JSON.parse(storedUser);
+
+// 2. GET VARIABLES
+const userDistricts = currentUser.permissions.allowedDistricts || [];
+const userRole = currentUser.role || ""; // e.g. "JKR" or "Group IT"
+
+console.log(`User: ${currentUser.username}, Role: ${userRole}`);
+
+// 3. DEFINE FILTER LOGIC
+let initialCqlFilter = "1=0"; // DEFAULT: HIDE EVERYTHING (Safety First!)
+
+// Scenario A: JKR / Admin / Superuser (Explicitly allow ALL)
+// Update 'Group IT' to whatever your exact admin role name is in the DB
+if (userRole.includes("JKR") || userRole.includes("Group IT") || userRole.includes("Admin")) {
+    initialCqlFilter = "1=1"; // Show All
+} 
+// Scenario B: Inspector with Assigned Districts
+else if (userDistricts.length > 0) {
+    const distList = userDistricts.map(d => `'${d}'`).join(',');
+    initialCqlFilter = `district_code IN (${distList})`;
+}
+// Scenario C: Inspector with NO Districts -> "1=0" (Still sees nothing, safe)
+
+console.log("Applying Road Filter:", initialCqlFilter);
+
+
+
 let currentSearchField = 'road_name'; // Default search field
 //pothole layer
 let potholeLayer; // Define globally
@@ -155,8 +185,6 @@ const potholeStyle = function(feature) {
 };
 
 
-// --- Highlight Style (Used for WFS-on-Demand result) ---
-// --- Highlight Style (Handles Roads AND Assets) ---
 function highlightRoadStyle(feature) {
     // 1. Check if it is a Line (Road) or a Point (Asset)
     const geometry = feature.getGeometry();
@@ -250,12 +278,6 @@ function districtFilterStyle(feature) {
 // 3. OVERLAY LAYERS
 // =========================================================================
 
-const currentUser = JSON.parse(sessionStorage.getItem('user')) || { role: 'guest', username: 'guest' };
-const userRole = currentUser.role || 'guest';
-// Ensure we have a valid array, even if permissions are missing
-const userDistricts = (currentUser.permissions && currentUser.permissions.allowedDistricts) ? currentUser.permissions.allowedDistricts : [];
-
-
 // WMS ROAD LAYER (FAST VISUALIZATION - Now handles display at all zoom levels)
 const roadLayerSource = new ol.source.TileWMS({
     url: `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/wms`,
@@ -263,7 +285,7 @@ const roadLayerSource = new ol.source.TileWMS({
         'LAYERS': 'rmisv2db_prod:gis_sabah_road_map',
         'STYLES': 'road_style',
         'TILED': true,
-        'cql_filter': '1=1' 
+        'cql_filter': initialCqlFilter 
     },
     useInterimTilesOnError: true,
     serverType: 'geoserver'
@@ -510,12 +532,7 @@ const map = new ol.Map({
     })
 });
 
-// map.on('moveend', function() {
-//     if (dashboardPanel.style.display === 'block') {
-//         updateDashboardCharts();
-//     }
-// });
-
+// SCALE LINE CONTROL
 const scaleLineControl = new ol.control.ScaleLine({
     target: 'my-scale-line', // <--- THIS IS THE KEY. It forces the control into your div.
     units: 'metric',
@@ -592,6 +609,100 @@ const searchTypeToView = {
     'dun_code':'vw_search_dun_code' // need to configure new query in geoserver
 };
 
+
+// =========================================================================
+// UI CONFIG: DYNAMIC DISTRICT LIST & AUTO-ZOOM
+// =========================================================================
+
+// 1. MASTER LIST (Value = DB Code, Text = GeoJSON Name)
+// IMPORTANT: The "text" must match the "NAME_2" property in your sabah_district.geojson exactly!
+const MASTER_DISTRICTS = [
+    { value: "17", text: "Beaufort" },
+    { value: "08", text: "Beluran" },
+    { value: "13", text: "Keningau" },
+    { value: "09", text: "Kinabatangan" },
+    { value: "03", text: "Kota Belud" },
+    { value: "01", text: "Kota Kinabalu" },
+    { value: "22", text: "Kota Marudu" },
+    { value: "18", text: "Kuala Penyu" },
+    { value: "05", text: "Kudat" },
+    { value: "24", text: "Kunak" },
+    { value: "11", text: "Lahad Datu" },
+    { value: "15", text: "Nabawan" },
+    { value: "02", text: "Papar" },
+    { value: "21", text: "Penampang" },
+    { value: "23", text: "Pitas" },
+    { value: "27", text: "Putatan" },
+    { value: "06", text: "Ranau" },
+    { value: "07", text: "Sandakan" },
+    { value: "12", text: "Semporna" },
+    { value: "19", text: "Sipitang" },
+    { value: "14", text: "Tambunan" },
+    { value: "10", text: "Tawau" },
+    { value: "28", text: "Telupid" },
+    { value: "16", text: "Tenom" },
+    { value: "25", text: "Tongod" },
+    { value: "04", text: "Tuaran" }
+];
+
+function populateDistrictDropdown() {
+    const dropdown = document.getElementById("districtFilter");
+    if (!dropdown) return;
+
+    // 1. Clear existing HTML options
+    dropdown.innerHTML = '';
+
+    // 2. Add "ALL" Option (Always present)
+    const allOption = document.createElement("option");
+    allOption.value = "ALL";
+    allOption.textContent = "ALL DISTRICTS";
+    dropdown.appendChild(allOption);
+
+    // 3. Loop through Master List and Add Allowed Districts
+    MASTER_DISTRICTS.forEach(dist => {
+        // CHECK: If user is Admin (empty list) OR User has specific access
+        if (userDistricts.length === 0 || userDistricts.includes(dist.value)) {
+            const option = document.createElement("option");
+            option.value = dist.value; 
+            option.textContent = dist.text;
+            dropdown.appendChild(option);
+        }
+    });
+
+    // 4. AUTO-ZOOM LOGIC (The "Fake Click")
+    // If the user is an Inspector (has only 1 district), auto-select and zoom.
+    if (userDistricts.length === 1) {
+        
+        // Set the value in the UI
+        dropdown.value = userDistricts[0]; 
+        
+        // Update the global variable manually just in case
+        currentDistrict = userDistricts[0];
+
+        // 5. WAIT FOR GEOJSON TO LOAD
+        // We can't zoom until 'districtLayer' has finished loading the shapes.
+        // We check every 0.5 seconds.
+        const checkLayerReady = setInterval(() => {
+            const source = districtLayer.getSource();
+            
+            // Check if features exist yet
+            if (source && source.getState() === 'ready' && source.getFeatures().length > 0) {
+                
+                console.log("Auto-zooming to assigned district...");
+                clearInterval(checkLayerReady); // Stop checking
+                
+                // TRIGGER THE EVENT YOU SHOWED ME
+                // This runs your existing code: `map.getView().fit(...)`
+                dropdown.dispatchEvent(new Event('change')); 
+                
+            }
+        }, 500); 
+    }
+}
+
+// === CALL THIS FUNCTION AT THE END OF YOUR FILE ===
+populateDistrictDropdown();
+
 // =========================================================================
 // WFS HELPER FUNCTION (Targeted query only)
 // =========================================================================
@@ -604,20 +715,29 @@ const searchTypeToView = {
 function queryWFS(viewName, cqlFilter) {
     let finalCql = cqlFilter;
 
+    // --- 1. APPLY DISTRICT PERMISSION (New Security Layer) ---
+    // If I am NOT Admin (userDistricts has items), strictly limit search results.
+    if (userDistricts.length > 0) {
+        const distList = userDistricts.map(d => `'${d}'`).join(',');
+        // Combine the user's search query with the security restriction
+        finalCql = `(${finalCql}) AND district_code IN (${distList})`;
+    }
+    // ---------------------------------------------------------
+
+    // 2. APPLY ROAD TYPE FILTER (Your existing logic)
     if(activeRoadTypes.size > 0 && activeRoadTypes.size < Object.keys(roadColors).length) {
         const types = Array.from(activeRoadTypes).map(type => `'${type}'`).join(',');
         const typeFilter = `"layer" IN (${types})`;
-        finalCql = `(${cqlFilter}) AND (${typeFilter})`;
-    }else if(activeRoadTypes.size === 0) {
-        finalCql = "1=0"; // No types active, return no results
+        finalCql = `(${finalCql}) AND (${typeFilter})`;
+    } else if(activeRoadTypes.size === 0) {
+        finalCql = "1=0"; 
     }
 
-    // We are requesting the geometry and attributes for filtering/highlighting
     const url = (
         `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&` +
         'version=1.0.0&request=GetFeature&typeName=rmisv2db_prod:'+ viewName + '&' +
         'outputFormat=application/json&srsName=EPSG:4326&' +
-        'cql_filter=' + encodeURIComponent(finalCql)+ // Use finalCql here
+        'cql_filter=' + encodeURIComponent(finalCql)+ 
         '&maxFeatures=100' +
         '&_=' + Date.now()
     );
@@ -1014,45 +1134,63 @@ centerBtn.addEventListener('click', function () {
 function updateRoadFilter() {
     let cqlFilter = [];
 
-    // --- Road Type Filter ---
+    // 1. ROAD TYPE FILTER (Legend Toggles)
     if (activeRoadTypes.size > 0 && activeRoadTypes.size < Object.keys(roadColors).length) {
         const types = Array.from(activeRoadTypes).map(type => `'${type}'`).join(',');
         cqlFilter.push(`"layer" IN (${types})`);
     }
 
-    // --- District Filter ---
+    // 2. DISTRICT FILTER (The Fix!)
     if (currentDistrict !== "ALL") {
+        // Case A: User specifically clicked "Sandakan" in the dropdown
         cqlFilter.push(`"district_code" = '${currentDistrict}'`);
+    } 
+    else {
+        // Case B: User clicked "ALL" (or it's the default on load)
+        // WE MUST CHECK: Is this user actually allowed to see "ALL"?
+        
+        if (userDistricts.length > 0) {
+            // I am an Inspector: "ALL" means "All MY assigned districts"
+            const distList = userDistricts.map(d => `'${d}'`).join(',');
+            cqlFilter.push(`"district_code" IN (${distList})`);
+        }
+        // If userDistricts is empty, I am Admin -> "ALL" means "The Whole State" (No filter added)
     }
 
+    // 3. APPLY FILTER
     if (activeRoadTypes.size === 0) {
-    // If no road types are active, hide the road layer
-    roadLayer.setVisible(false);
-} else {
-    roadLayer.setVisible(true);
-
-    const finalCql = cqlFilter.length > 0 ? cqlFilter.join(' AND ') : '1=1';
-    roadLayerSource.updateParams({ 'cql_filter': finalCql });
-}
+        roadLayer.setVisible(false);
+    } else {
+        roadLayer.setVisible(true);
+        const finalCql = cqlFilter.length > 0 ? cqlFilter.join(' AND ') : '1=1';
+        
+        // This log proves it's working
+        console.log("Updating Road Filter:", finalCql); 
+        roadLayerSource.updateParams({ 'cql_filter': finalCql });
+    }
 }
 
 function updateLmcRoadFilter() {
-    // Get the source of the LMC road layer
-    const lmcRoadSource = lmcRoadLayer.getSource();
+    let cqlFilter = "";
 
-    let cqlFilter = '1=1'; // Default: show all
-
-    // Apply district filter if one is selected
     if (currentDistrict !== "ALL") {
-        // Assuming the district code field name in the LMC layer is also 'district_code'
         cqlFilter = `"district_code" = '${currentDistrict}'`;
+    } 
+    else {
+        // The Fix: Check permissions for "ALL" mode
+        if (userDistricts.length > 0) {
+            const distList = userDistricts.map(d => `'${d}'`).join(',');
+            cqlFilter = `"district_code" IN (${distList})`;
+        } else {
+            cqlFilter = "1=1"; // Admin sees everything
+        }
     }
 
-    // Update the WMS source parameters
-    lmcRoadSource.updateParams({ 
+    lmcRoadLayer.getSource().updateParams({ 
         'cql_filter': cqlFilter 
     });
 }
+
 
 // Clear highlight and search results after filter change
 highlightLayer.getSource().clear();

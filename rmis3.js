@@ -254,7 +254,7 @@ window.routeToPopupLocation = function(destLon, destLat) {
 // =========================================================================
 async function getRoute(start, end) {
     if (typeof routeSource !== 'undefined') routeSource.clear();
-    const apiUrl = `http://${SERVER_IP}:3005/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
+    const apiUrl = `https://${SERVER_IP}:3005/route?start_lon=${start.lon}&start_lat=${start.lat}&end_lon=${end.lon}&end_lat=${end.lat}`;
     try {
         const response = await fetch(apiUrl);
         const routeData = await response.json(); 
@@ -703,7 +703,7 @@ async function scanAssets(type) {
     statusMsg.innerText = "Scanning...";
 
     try {
-        const r = await fetch(`http://${SERVER_IP}:3005/assets/critical?type=${type}`);
+        const r = await fetch(`https://${SERVER_IP}:3005/assets/critical?type=${type}`);
         const assets = await r.json();
         
         if(assets && assets.length > 0) {
@@ -775,7 +775,7 @@ if(btnCalculate) {
 
 async function runUnifiedOptimization(stops) {
     const coordsArray = stops.map(s => [s.lon, s.lat]);
-    const apiUrl = `http://${SERVER_IP}:3005/route/optimize?locations=${JSON.stringify(coordsArray)}`;
+    const apiUrl = `https://${SERVER_IP}:3005/route/optimize?locations=${JSON.stringify(coordsArray)}`;
     
     try {
         const resp = await fetch(apiUrl);
@@ -844,8 +844,20 @@ async function fetchRoadSuggestions(searchText, listElement, inputElement, onSel
     listElement.innerHTML = "<div style='color:#ccc;font-size:10px;padding:5px'>Searching...</div>";
     
     try {
-        const viewName = "rmisv2db_prod:gis_sabah_road_map"; // CHECK THIS NAME!
-        const cql = `road_name ILIKE '%${searchText}%'`;
+        const viewName = "rmisv2db_prod:gis_sabah_road_map"; 
+        
+        // --- SECURITY PATCH START ---
+        // 1. Start with the user's search text
+        let cql = `road_name ILIKE '%${searchText}%'`;
+
+        // 2. Add District Filter if user is restricted
+        // (Make sure 'userDistricts' is available globally from rmis.js)
+        if (typeof userDistricts !== 'undefined' && userDistricts.length > 0) {
+            const distList = userDistricts.map(d => `'${d}'`).join(',');
+            cql = `(${cql}) AND district_code IN (${distList})`;
+        }
+        // --- SECURITY PATCH END ---
+
         const url = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${viewName}&outputFormat=application/json&propertyName=road_name&cql_filter=${encodeURIComponent(cql)}&maxFeatures=5`;
 
         const r = await fetch(url);
@@ -877,7 +889,17 @@ async function fetchRoadSuggestions(searchText, listElement, inputElement, onSel
 // 2. Fetch Geometry (For Coordinates)
 async function fetchRoadGeometry(roadName) {
     const viewName = "rmisv2db_prod:gis_sabah_road_map";
-    const cql = `road_name ILIKE '${roadName}'`;
+    
+    // --- SECURITY PATCH START ---
+    let cql = `road_name ILIKE '${roadName}'`;
+
+    // Add District Filter if user is restricted
+    if (typeof userDistricts !== 'undefined' && userDistricts.length > 0) {
+        const distList = userDistricts.map(d => `'${d}'`).join(',');
+        cql = `(${cql}) AND district_code IN (${distList})`;
+    }
+    // --- SECURITY PATCH END ---
+
     const url = `${GEOSERVER_HOST}/geoserver/rmisv2db_prod/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${viewName}&outputFormat=application/json&cql_filter=${encodeURIComponent(cql)}&maxFeatures=1`;
 
     try {
@@ -885,15 +907,19 @@ async function fetchRoadGeometry(roadName) {
         const d = await r.json();
         if(d.features && d.features.length > 0) {
             // Simple center point logic
-            const geom = new ol.format.GeoJSON().readGeometry(d.features[0].geometry);
+            // Use the map's projection to handle transforms safely
+            const format = new ol.format.GeoJSON();
+            const feature = format.readFeature(d.features[0], {
+                dataProjection: 'EPSG:4326', // WFS returns 4326 usually
+                featureProjection: map.getView().getProjection() // Convert to Map's projection (3857)
+            });
+
+            const geom = feature.getGeometry();
             const center = ol.extent.getCenter(geom.getExtent());
             
-            // Check Projection
-            if(center[0] > 180) {
-                const ll = ol.proj.toLonLat(center);
-                return { lon: ll[0], lat: ll[1] };
-            }
-            return { lon: center[0], lat: center[1] };
+            // Return Lat/Lon (EPSG:4326) for the routing engine API
+            const ll = ol.proj.toLonLat(center);
+            return { lon: ll[0], lat: ll[1] };
         }
     } catch(e) { console.error(e); }
     return null;
