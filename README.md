@@ -34,7 +34,7 @@ RMIS is a comprehensive web-based geospatial platform designed for managing road
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### **Prerequisites**
 * Node.js (v14 or higher)
@@ -72,7 +72,7 @@ RMIS is a comprehensive web-based geospatial platform designed for managing road
 
 5.  **Access the App:**
     Open your browser and navigate to:
-    `http://localhost:3000` (or your configured port).
+    `http://localhost:3005` (or your configured port).
 
 ---
 
