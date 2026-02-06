@@ -187,12 +187,12 @@ app.get('/assets/potholes', async (req, res) => {
             FROM tbl_surv_rec r
             LEFT JOIN tbl_defect_type t ON r.defect_type_code = t.defect_type_code
             
-            -- FAST INNER JOIN (No casting, No trimming)
+            -- FAST INNER JOIN 
             INNER JOIN tbl_before_after_photo_link ph 
             ON r.surv_rec_id = ph.before_surv_rec_id
             
             WHERE r.geom IS NOT NULL 
-            AND r.surv_rec_timestamp::date > '2021-01-01'
+            AND r.surv_rec_timestamp::date > '2019-01-01'
             ${districtFilter}
         
         `;

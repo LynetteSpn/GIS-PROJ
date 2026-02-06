@@ -649,18 +649,16 @@ function populateDistrictDropdown() {
     const dropdown = document.getElementById("districtFilter");
     if (!dropdown) return;
 
-    // 1. Clear existing HTML options
     dropdown.innerHTML = '';
 
-    // 2. Add "ALL" Option (Always present)
+    // 1. Add "ALL" Option
     const allOption = document.createElement("option");
     allOption.value = "ALL";
     allOption.textContent = "ALL DISTRICTS";
     dropdown.appendChild(allOption);
 
-    // 3. Loop through Master List and Add Allowed Districts
+    // 2. Populate Dropdown
     MASTER_DISTRICTS.forEach(dist => {
-        // CHECK: If user is Admin (empty list) OR User has specific access
         if (userDistricts.length === 0 || userDistricts.includes(dist.value)) {
             const option = document.createElement("option");
             option.value = dist.value; 
@@ -669,32 +667,55 @@ function populateDistrictDropdown() {
         }
     });
 
-    // 4. AUTO-ZOOM LOGIC (The "Fake Click")
-    // If the user is an Inspector (has only 1 district), auto-select and zoom.
-    if (userDistricts.length === 1) {
-        
-        // Set the value in the UI
-        dropdown.value = userDistricts[0]; 
-        
-        // Update the global variable manually just in case
-        currentDistrict = userDistricts[0];
-
-        // 5. WAIT FOR GEOJSON TO LOAD
-        // We can't zoom until 'districtLayer' has finished loading the shapes.
-        // We check every 0.5 seconds.
+    // 3. SMART AUTO-ZOOM (Wait for map data)
+    if (userDistricts.length > 0) {
         const checkLayerReady = setInterval(() => {
             const source = districtLayer.getSource();
             
-            // Check if features exist yet
+            // Wait until features are actually loaded
             if (source && source.getState() === 'ready' && source.getFeatures().length > 0) {
                 
-                console.log("Auto-zooming to assigned district...");
                 clearInterval(checkLayerReady); // Stop checking
+                console.log("Map loaded. Calculating user territory...");
+
+                // --- SCENARIO A: Single District (Click it) ---
+                if (userDistricts.length === 1) {
+                    dropdown.value = userDistricts[0]; 
+                    currentDistrict = userDistricts[0];
+                    dropdown.dispatchEvent(new Event('change')); 
+                }
                 
-                // TRIGGER THE EVENT YOU SHOWED ME
-                // This runs your existing code: `map.getView().fit(...)`
-                dropdown.dispatchEvent(new Event('change')); 
-                
+                // --- SCENARIO B: Multiple Districts (Calculate Box) ---
+                else {
+                    let combinedExtent = ol.extent.createEmpty();
+                    let matchCount = 0;
+
+                    source.getFeatures().forEach(feature => {
+                        // 1. Get the Name from GeoJSON (e.g., "Beaufort")
+                        const fName = feature.get('NAME_2'); 
+
+                        // 2. Find the matching Code in our Master List
+                        const matchedItem = MASTER_DISTRICTS.find(
+                            m => m.text.trim().toLowerCase() === fName.trim().toLowerCase()
+                        );
+
+                        // 3. If we found the code, AND the user is assigned to it...
+                        if (matchedItem && userDistricts.includes(matchedItem.value)) {
+                            // Expand the zoom box to include this district
+                            ol.extent.extend(combinedExtent, feature.getGeometry().getExtent());
+                            matchCount++;
+                        }
+                    });
+
+                    // 4. Zoom if we found matches
+                    if (matchCount > 0) {
+                        map.getView().fit(combinedExtent, {
+                            duration: 1000,
+                            padding: [50, 50, 50, 50] // Add padding so it looks nice
+                        });
+                        console.log(`Zoomed to ${matchCount} assigned districts.`);
+                    }
+                }
             }
         }, 500); 
     }

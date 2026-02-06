@@ -1,0 +1,385 @@
+rmis.js
+Thanks — I reviewed this version of map_configuration.js and extracted every function (named functions, function expressions assigned to const, and important anonymous handlers). Below is a clean numbered list with a very short purpose and one-line description for each function/handler.
+
+1. osmDistrictStyle(feature)
+   - Purpose: District polygon style for OSM (regular) basemap.
+   - Description: Returns an ol.style.Style with transparent stroke, subtle fill and text label.
+
+2. satelliteDistrictStyle(feature)
+   - Purpose: District polygon style for satellite basemap.
+   - Description: Returns an ol.style.Style with white stroke, white-stroked label and subtle fill.
+
+3. potholeStyle(feature)  (const function)
+   - Purpose: Style pothole points by defect category.
+   - Description: Classifies defect via getDefectCategory and returns a colored circle style with white outline.
+
+4. highlightRoadStyle(feature)
+   - Purpose: Style used to highlight selected roads or assets.
+   - Description: Returns either an array of styles for LineStrings (colored line + cyan glow + label) or for Points (cyan halo + inner dot + ID label).
+
+5. districtFilterStyle(feature)
+   - Purpose: District layer style that applies selection highlight.
+   - Description: Chooses appropriate base style (satellite/OSM) and adds a yellow translucent fill when feature matches currentDistrict.
+
+6. satelliteLayer.getSource().on('tileloaderror', handler)  (anonymous event handler)
+   - Purpose: Fallback if Google tiles fail.
+   - Description: Replaces satellite tile source with ESRI World Imagery on tile load error.
+
+7. setBasemap(mode)
+   - Purpose: Toggle and apply basemap mode (SATELLITE or REGULAR).
+   - Description: Shows/hides base layers, sets isSatellite, updates basemap button tooltip and refreshes district styles.
+
+8. basemapButton.addEventListener('click', handler)  (anonymous event handler)
+   - Purpose: Basemap toggle button listener.
+   - Description: Switches between SATELLITE and REGULAR via setBasemap.
+
+9. populateDistrictDropdown()
+   - Purpose: Build district dropdown and auto-zoom to user's assigned districts.
+   - Description: Populates #districtFilter with MASTER_DISTRICTS (respecting userDistricts), waits for districtLayer readiness and auto-fits view for single/multiple assigned districts.
+
+10. queryWFS(viewName, cqlFilter)
+    - Purpose: Run targeted WFS GetFeature queries with permission/type filtering.
+    - Description: Applies district and activeRoadTypes constraints to CQL, fetches GeoServer WFS JSON, converts to OL features and returns a Promise.
+
+11. fetchNearbyAssets(lon, lat)  (async)
+    - Purpose: Find nearby Bridge and Culvert assets around a coordinate.
+    - Description: If BCCheckbox is checked, runs small BBOX WFS queries for bridge and culvert, tags results with _assetType and returns combined array.
+
+12. fetchExtendedAttributes(roadId)  (async)
+    - Purpose: Retrieve extended attribute properties for a road.
+    - Description: Queries vw_road_map2 via WFS by pkm_road_id and returns properties object or null.
+
+13. filterBy(fieldName)
+    - Purpose: Switch the search field used by autosuggest.
+    - Description: Sets currentSearchField, updates the road search input placeholder and clears autocomplete.
+
+14. fetchRoadNames(searchText)  (async)
+    - Purpose: Get autocomplete suggestions via WFS.
+    - Description: Builds an ILIKE CQL filter (respecting currentDistrict and activeRoadTypes), calls queryWFS, extracts unique values and passes them to renderAutocomplete.
+
+15. renderAutocomplete(results, fieldName)
+    - Purpose: Populate autocomplete UI list.
+    - Description: Clears #autocomplete-list and appends clickable divs that set the input and call fetchAndZoomToFeature on click.
+
+16. fetchAndZoomToFeature(fieldName, fieldValue)  (async)
+    - Purpose: Resolve a search result to geometry, zoom and optionally open popup.
+    - Description: Performs direct or indirect WFS queries (based on field), reads features, calls zoomToFeatures, fetches extended attributes and nearby assets, then showRoadInfo for a single result.
+
+17. roadSearchInput.addEventListener('input', handler)  (anonymous)
+    - Purpose: Trigger autosuggest when typing in search input.
+    - Description: Debounces by requiring >=2 characters, then calls fetchRoadNames.
+
+18. zoomToFeatures(features)
+    - Purpose: Highlight features and fit the map view to their combined extent.
+    - Description: Clears highlightLayer, clones & reprojects features into map projection, adds them to highlightLayer and fits view with padding and maxZoom.
+
+19. resetButton click handler (anonymous)
+    - Purpose: Reset search, filters and highlights.
+    - Description: Clears search input and autocomplete, clears highlightLayer, resets district and filterBy selects (dispatches change events).
+
+20. centerBtn.addEventListener('click', handler)  (anonymous)
+    - Purpose: Toggle center-on-click mode and recenter map.
+    - Description: Toggles centerOnClick state and recenters map to default coordinates & zoom.
+
+21. updateRoadFilter()
+    - Purpose: Compute and apply WMS cql_filter for main road WMS layer.
+    - Description: Builds CQL from activeRoadTypes and currentDistrict (respecting userDistricts permissions), toggles roadLayer visibility and updates roadLayerSource params.
+
+22. updateLmcRoadFilter()
+    - Purpose: Compute and apply WMS cql_filter for LMC layer.
+    - Description: Builds district CQL respecting user permissions and updates lmcRoadLayer source params.
+
+23. document.getElementById("districtFilter").addEventListener("change", handler)  (anonymous)
+    - Purpose: React to district dropdown changes.
+    - Description: Updates currentDistrict, calls updateRoadFilter/updateLmcRoadFilter, refreshes district layer and zooms to selected district geometry (or resets view for ALL).
+
+24. getDefectCategory(specificType)
+    - Purpose: Map a defect description string to a defect category.
+    - Description: Uses keyword checks to return one of 'Surface','Drainage','Vegetation','Slope','Structure' or 'Other'.
+
+25. (bridgeVectorLayer style function)  (anonymous)
+    - Purpose: Style bridge vector features for hit-detection.
+    - Description: Returns transparentPointStyle for Points; transparentLineStyle otherwise (keeps features pickable but visually hidden).
+
+26. (culvertVectorLayer style function)  (anonymous)
+    - Purpose: Style culvert vector features for hit-detection.
+    - Description: Same pattern as bridge vector style (transparent point or transparent line for picking).
+
+27. Legend/legend-item builders (anonymous inside for-loop)
+    - Purpose: Create clickable legend items for road types.
+    - Description: For each roadColors entry, builds a legend item div, sets classes based on activeRoadTypes and attaches click handler that toggles activeRoadTypes and calls updateRoadFilter.
+
+28. BCItemsContainer item click handlers (anonymous)
+    - Purpose: Toggle Bridges/Culverts WMS layers from legend.
+    - Description: Each legend item toggles its OL layer visibility and refreshes WMS source when turned on.
+
+29. sabahRoadCheckbox change handler (anonymous)
+    - Purpose: Master toggle for Sabah road layer and legend.
+    - Description: Shows/hides roadLayer, updates activeRoadTypes (enable all / disable all) and adjusts legend item classes then calls updateRoadFilter.
+
+30. BCCheckbox change handler (anonymous)
+    - Purpose: Master toggle for Bridges & Culverts.
+    - Description: Shows/hides culvert/bridge WMS layers (and group), refreshes sources if visible, and toggles legend item states.
+
+31. potholeCheckbox change handler (anonymous)
+    - Purpose: Toggle pothole layer and its legend UI.
+    - Description: Shows/hides potholeLayer (refresh if TileWMS), and shows/hides the pothole legend list.
+
+32. chainageCheckbox change handler (anonymous)
+    - Purpose: Toggle chainage WMS layer and legend state.
+    - Description: Shows/hides chainageLayer and activates/deactivates mcdcChainageItem class.
+
+33. lmcRoadCheckbox change handler (anonymous)
+    - Purpose: Toggle LMC layer and its legend item.
+    - Description: Shows/hides lmcRoadLayer and updates lmcRoadItem class.
+
+34. legendToggleBtn click handler & legendMobileToggleBtn click handler (anonymous)
+    - Purpose: Desktop/mobile legend minimize/maximize toggle.
+    - Description: Toggles minimized/mobile-active states on legend and adjusts button text/title and CSS classes based on window width.
+
+35. map.on('click', anonymous) (small mobile helper)
+    - Purpose: Close legend on mobile when clicking the map.
+    - Description: Removes mobile-active class if legend is open and window is narrow.
+
+36. window.addEventListener('resize', anonymous)
+    - Purpose: Maintain legend responsive state on resize.
+    - Description: Switches between mobile/desktop styling states and restores minimize state as needed.
+
+
+rmis2.js:
+1. map.on('pointermove', handler)
+   - Purpose: show lat/lon under the cursor.
+   - Description: pointermove event handler that converts map coordinates to Lon/Lat and writes them into the #coords element.
+
+2. selectModeToggle change handler (anonymous)
+   - Purpose: toggle selection mode between "radius" and "precise".
+   - Description: updates window.currentSelectionMode and clears highlights / popup when switching to precise mode.
+
+3. initTooltipLogic() (invocation check)
+   - Purpose: initialize tooltips if implemented.
+   - Description: file checks for and calls initTooltipLogic() if that function exists elsewhere.
+
+4. (sharePopup) overlay creation
+   - Purpose: create an OL overlay element used for sharing location results.
+   - Description: not a function but important setup; element created and added to the map.
+
+5. copyCoordsToClipboard(lat, lon)
+   - Purpose: copy coordinates to clipboard.
+   - Description: writes "Lat: ..., Lng: ..." to navigator.clipboard and alerts on success (error logged on failure).
+
+6. popupElement click handler (anonymous)
+   - Purpose: close popup via delegated close button.
+   - Description: catch clicks inside the popup and call hideRoadInfo() when .ol-popup-closer is clicked.
+
+7. hideRoadInfo()
+   - Purpose: close/hide the road popup and clear UI highlights.
+   - Description: hides popup overlay, clears highlightLayer and clickRadiusSource, and resets lockedPopup.
+
+8. window.selectSpecificRoad(index, coordinate)
+   - Purpose: select and zoom to one road from the multi-result list.
+   - Description: retrieves stored feature by index, clones and highlights it, fits view to its extent, then calls processSingleFeature to show details.
+
+9. showMultiRoadList(features, coordinate)
+   - Purpose: display the "multiple roads found" list inside the popup.
+   - Description: builds HTML table listing candidates, stores features in window.multiSelectFeatures and positions popup at the click coordinate.
+
+10. showRoadInfo(feature, coordinate, nearbyAssets = [])
+    - Purpose: prepare and show the detailed road popup (initial ROAD page).
+    - Description: builds popupState.pages (ROAD + optional BRIDGES/CULVERTS/POTHOLES), constructs copy text/table rows, stores them and opens the popup by calling renderPopupPage(0).
+
+11. window.restoreMultiList()
+    - Purpose: re-open the multi-select list after inspecting a single item.
+    - Description: clears specific highlight, re-highlights all stored multi features and calls showMultiRoadList with saved coordinate.
+
+12. window.navigatePopup(direction)
+    - Purpose: navigate popup pages (Prev / Next).
+    - Description: changes popupState.currentIndex with boundary checks and calls renderPopupPage(newIndex).
+
+13. window.showAssetDirectly(feature, coordinate)
+    - Purpose: show details for a single Bridge or Culvert feature.
+    - Description: inspects properties to decide Bridge vs Culvert, builds a details table with condition coloring and opens the popup.
+
+14. renderPopupPage(pageIndex)
+    - Purpose: render popup HTML for a page (ROAD, BRIDGES, CULVERTS, POTHOLES).
+    - Description: reads popupState.pages, builds header, content (road table or grouped asset/pothole renderers), and footer (Copy / Prev & Next / List) HTML, and writes it into the popup content area.
+
+15. buildRoadTableHTML(props)
+    - Purpose: helper to build the ROAD details HTML table.
+    - Description: given road properties, returns an HTML string for standard fields (district, road type badge, IDs, lengths, chainages).
+
+16. handleRoadInfoClick(evt) (async)
+    - Purpose: main click handler to find features and open appropriate popup(s).
+    - Description: consolidated logic that (a) ignores clicks inside popup, (b) clears state, (c) checks for priority assets (bridges/culverts/potholes) with hitTolerance, (d) if asset clicked shows appropriate asset page/direct view, (e) otherwise runs local pixel search or WFS BBOX radius search, filters by active road types, highlights found features and either calls processSingleFeature or showMultiRoadList.
+
+17. asset-priority map.forEachFeatureAtPixel callback (anonymous)
+    - Purpose: find a priority asset under the click (Bridge/Culvert/Pothole).
+    - Description: used inside handleRoadInfoClick to stop search early if an asset is present (checks layer name and properties.type).
+
+18. local-vector map.forEachFeatureAtPixel callback (anonymous)
+    - Purpose: collect local vector features at the clicked pixel.
+    - Description: used inside handleRoadInfoClick; ignores reference layers and potholes (so they don’t mix into road search).
+
+19. window.processSingleFeature = async function(feature, coordinate)
+    - Purpose: fetch attributes, compute chainage coords, fetch nearby assets, and open road popup.
+    - Description: uses fetchExtendedAttributes(roadId), computes start/end chainage if missing, calls fetchNearbyAssets and then showRoadInfo.
+
+20. queryWFS and fetchNearbyAssets / fetchExtendedAttributes usage
+    - Purpose: server-side WFS lookup & asset queries (helpers defined elsewhere).
+    - Description: handleRoadInfoClick and processSingleFeature call queryWFS/fetchNearbyAssets/fetchExtendedAttributes (these helpers live in map_configuration.js, not defined in this file).
+
+21. locateBtn click handler (anonymous)
+    - Purpose: toggle the "Locate Me" flow (show user location & share UI).
+    - Description: toggles locateActive, calls navigator.geolocation.getCurrentPosition when enabling, and adds/removes a locationLayer showing an accuracy circle + marker; it also shows the sharePopup with WhatsApp and copy links and recenters the view.
+
+22. geolocation success callback (anonymous in locateBtn handler)
+    - Purpose: handle successful geolocation result.
+    - Description: creates accuracy circle and marker styles/features, adds them to a vector layer, builds share popup HTML (WhatsApp + copy), sets overlay position and recenters/zooms the map.
+
+23. geolocation error callback (anonymous in locateBtn handler)
+    - Purpose: handle geolocation failures.
+    - Description: maps error.code to user-friendly message, alerts the user and resets locate button state.
+
+
+rmis3.js:
+1. formatLength(line) — (const helper)
+   - Purpose: compute human-readable length for a LineString.
+   - Description: transforms geometry to EPSG:4326, measures length (meters or km) and returns a formatted string.
+
+2. createMeasureTooltip()
+   - Purpose: create/replace the measurement tooltip overlay.
+   - Description: builds a styled DOM element and an ol.Overlay used to show dynamic measurement values while drawing.
+
+3. addMeasureInteraction()
+   - Purpose: enable the measurement drawing interaction.
+   - Description: adds an ol.interaction.Draw(LineString), updates tooltip while drawing, finalizes tooltip on drawend and prepares a new tooltip.
+
+4. toggleMeasurement()
+   - Purpose: toggle measurement mode on/off.
+   - Description: turns measuring on (adds interaction, clears source, sets cursor) or off (removes interaction & overlay, resets cursor).
+
+5. measureBtn click handler (anonymous)
+   - Purpose: UI event to toggle measurement.
+   - Description: attached to measureBtn, calls toggleMeasurement().
+
+6. window.routeToPopupLocation(destLon, destLat)
+   - Purpose: start routing from current GPS location to an asset shown in a popup.
+   - Description: gets navigator.geolocation, builds start and end nodes, saves state, and calls getRoute(start, end) (and hides popup).
+
+7. getRoute(start, end) — async
+   - Purpose: request a route from backend and display it.
+   - Description: calls backend /route API with start/end coords, expects route_geometry, then draws it and logs steps; clears routeSource first.
+
+8. drawRouteOnMap(geojson)
+   - Purpose: render returned route geometry on the map.
+   - Description: reads GeoJSON into an OL feature, adds to routeSource and fits the map view to the route extent.
+
+9. startMode(mode) — async
+   - Purpose: initialize and display optimization / scanning / planner UI modes.
+   - Description: shows optimizePanel, hides/shows UI pieces depending on mode (planner, bridge, culvert), resets inputs and (for asset scanner) calls scanAssets.
+
+10. resetRoutePanel()
+    - Purpose: clear the route input UI and data.
+    - Description: empties inputs container, resets routeStops and stopCounter, adds default start/end inputs, and clears route visuals.
+
+11. addRouteInput(type = 'stop', prefillData = null)
+    - Purpose: dynamically create a route input row (start / end / stop).
+    - Description: builds DOM row with input and optional GPS button, registers entry in routeStops, supports prefill behavior (fill an empty end instead of adding row), and sets up autocomplete.
+
+12. handleGpsLocate(id)
+    - Purpose: fill a specific input with the device’s current location.
+    - Description: uses navigator.geolocation to get coords, updates the corresponding routeStops entry, updates UI & map indicators, and recenters map.
+
+13. updateMapIndicators()
+    - Purpose: draw markers for routeStops on map.
+    - Description: clears routeMarkerSource, iterates routeStops and adds styled point features for stops (different colors for start/end).
+
+14. fillExistingInput(id, data)
+    - Purpose: populate an existing input field with provided location data.
+    - Description: sets input value and updates the routeStops entry (value/lat/lon) and visual success state.
+
+15. removeRouteInput(id)
+    - Purpose: delete an input row and its state.
+    - Description: removes DOM row and removes the entry from routeStops.
+
+16. map.on('click', handler) — (anonymous, main click handler)
+    - Purpose: central map click dispatcher with prioritized behavior.
+    - Description: handles multiple priorities in order: measurement (ignore), marker/asset click (add stop), legacy job marker toggle, isAddingJobs (pin location), routeWizard start/dest selection, otherwise delegates to handleRoadInfoClick for road info.
+
+17. scanAssets(type) — async
+    - Purpose: fetch and display critical assets for scanning mode.
+    - Description: calls backend /assets/critical?type=..., shows status message, and adds up to first 50 red-dot markers to the map.
+
+18. addAssetMarker(lon, lat, name)
+    - Purpose: create a red-dot asset marker feature on map.
+    - Description: makes an ol.Feature at lon/lat, sets properties (isAsset, name, coords) and a red circle style, then adds to routeMarkerSource.
+
+19. btnCalculate click handler (anonymous)
+    - Purpose: start optimization or direct routing when user clicks calculate.
+    - Description: collects valid routeStops; if 2 stops, calls getRoute; if >2, calls runUnifiedOptimization; updates status messages.
+
+20. runUnifiedOptimization(stops) — async
+    - Purpose: request optimized multi-stop route from backend.
+    - Description: posts stops to /route/optimize API, expects route_geometry, then draws route and updates status.
+
+21. setupAutocomplete(id)
+    - Purpose: wire autocomplete behavior for an input row.
+    - Description: attaches input listener to the row’s input element; on typing (>=3 chars) it calls fetchRoadSuggestions and passes a callback to resolve selection.
+
+22. resolveLocation(roadName, id) — async
+    - Purpose: resolve a selected road name to coordinates and update input state.
+    - Description: fetches geometry for the road (via fetchRoadGeometry), sets stop.lat/lon, marks input visually and updates map indicators.
+
+23. plannerBtn / btnAdd / btnClear / btnClose and scan tool listeners (anonymous)
+    - Purpose: UI wiring for planner panel controls.
+    - Description: attach clicks to startMode('planner'), addRouteInput('stop'), resetRoutePanel, and hide optimizePanel, respectively.
+
+24. fetchRoadSuggestions(searchText, listElement, inputElement, onSelect) — async
+    - Purpose: query GeoServer for road name suggestions and render them.
+    - Description: builds secure CQL (applies userDistricts filter when present), requests WFS with propertyName=road_name, de-duplicates results and populates the provided listElement, calling onSelect(name) when an item is chosen.
+
+25. fetchRoadGeometry(roadName) — async
+    - Purpose: fetch a road geometry and return a center coordinate (lon/lat).
+    - Description: requests WFS (maxFeatures=1) for the road name with security district filter, reads the feature, computes center of its extent, and returns lon/lat.
+
+26. (Implicit dependencies / expected functions)
+    - Purpose: note of functions expected elsewhere.
+    - Description: code assumes existence of routeSource, routeMarkerSource, getRoute (used elsewhere), handleRoadInfoClick, updateMapMarkers, renderJobList — these are referenced but not defined here.
+
+
+rmis4.js:
+1. dashboardOpenBtn.onclick (anonymous handler)
+   - Purpose: Open the dashboard panel and prepare UI/data.
+   - Description: Shows the panel, calls updateDashboardCharts(), applies mobile layout changes, and forces Bridges/Culverts and Potholes layers on (dispatches change events).
+
+2. dashboardCloseBtn.onclick (anonymous handler)
+   - Purpose: Close the dashboard panel and revert UI.
+   - Description: Hides the panel and removes mobile layout classes added when opening.
+
+3. assetChart (Chart.js instance, not a function)
+   - Purpose: Visualize asset condition (Good/Fair/Poor).
+   - Description: Doughnut chart created with placeholder data and ChartDataLabels plugin; updated by updateDashboardCharts.
+
+4. typeChart (Chart.js instance, not a function)
+   - Purpose: Visualize counts of asset types (Bridge vs Culvert).
+   - Description: Bar chart created with placeholder data and ChartDataLabels plugin; updated by updateDashboardCharts.
+
+5. getVisibleAssets(extent) — async
+   - Purpose: Fetch bridges and culverts inside the current map view from GeoServer.
+   - Description: Converts map extent to Lon/Lat, builds BBOX WFS requests for bridge and culvert layers, fetches and tags results with _assetType, returns combined properties array.
+
+6. bboxCql (inline helper inside getVisibleAssets)
+   - Purpose: Build BBOX CQL string for WFS requests.
+   - Description: Small inline function used to create the BBOX(...) string with EPSG:4326 coordinates (declared inside getVisibleAssets as const/lambda).
+
+7. normalizeCondition(rawCond)
+   - Purpose: Normalize messy condition text into Good/Fair/Poor/Unknown.
+   - Description: Cleans input string and checks prefix to return canonical condition strings.
+
+8. updateDashboardCharts() — async
+   - Purpose: Master function that refreshes dashboard data & charts.
+   - Description: Skips work if panel hidden, gets current map extent, calls getVisibleAssets, aggregates Good/Fair/Poor and Bridge/Culvert counts, updates the DOM summary and both Chart.js datasets and redraws them.
+
+9. dashboardPanel open/close DOM wiring (implicit handlers)
+   - Purpose: UI wiring already set up for opening and closing the panel.
+   - Description: The onclick handlers for dashboardOpenBtn/dashboardCloseBtn perform the primary UI control actions (listed above).
+
